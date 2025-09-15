@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-config
+  namespace: forensic-evidence
+data:
+  REACT_APP_EVIDENCE_SERVICE_URL: "http://evidence.forensic-evidence.local/api/v1"
+  REACT_APP_AI_SERVICE_URL: "http://ai-analysis.forensic-evidence.local"
+

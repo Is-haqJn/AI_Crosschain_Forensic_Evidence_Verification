@@ -1,0 +1,221 @@
+
+services:
+  # Evidence Service
+  evidence-service:
+    build:
+      context: ./microservices/evidence-service
+      dockerfile: Dockerfile
+      target: dev
+    env_file:
+      - .env
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      # Use Docker network hostnames to talk to infra containers
+      - DATABASE_URL=postgresql://forensic_user:password@postgres:5432/forensic_db
+      - MONGODB_URI=mongodb://admin:password@mongodb:27017/evidence_db?authSource=admin
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://admin:password@rabbitmq:5672
+      - IPFS_HOST=ipfs
+      - IPFS_PORT=5001
+      - IPFS_PROTOCOL=http
+      - SEPOLIA_RPC_URL=${SEPOLIA_RPC_URL}
+      - AMOY_RPC_URL=${AMOY_RPC_URL}
+      - CONTRACT_ADDRESS_SEPOLIA=${CONTRACT_ADDRESS_SEPOLIA}
+      - CONTRACT_ADDRESS_AMOY=${CONTRACT_ADDRESS_AMOY}
+      - BRIDGE_ADDRESS_SEPOLIA=${BRIDGE_ADDRESS_SEPOLIA}
+      - BRIDGE_ADDRESS_AMOY=${BRIDGE_ADDRESS_AMOY}
+      - WALLET_PRIVATE_KEY=${WALLET_PRIVATE_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
+      - JWT_REFRESH_EXPIRES_IN=${JWT_REFRESH_EXPIRES_IN}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - AI_SERVICE_URL=http://ai-analysis-service:8001
+      - MODEL_PATH=/models
+      - MAX_FILE_SIZE=${MAX_FILE_SIZE}
+      - ALLOWED_MIME_TYPES=${ALLOWED_MIME_TYPES}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      # Optional initial admin (dev only)
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - ADMIN_NAME=${ADMIN_NAME}
+      - ADMIN_ORG=${ADMIN_ORG}
+    volumes:
+      - ./microservices/evidence-service:/app
+      - /app/node_modules
+      - evidence-uploads:/app/uploads
+      - evidence-logs:/app/logs
+    depends_on:
+      - postgres
+      - mongodb
+      - redis
+      - rabbitmq
+      - ipfs
+    networks:
+      - forensic-network
+    restart: unless-stopped
+
+  # AI Analysis Service (dev)
+  ai-analysis-service:
+    build:
+      context: ./microservices/ai-analysis-service
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8001:8001"
+    environment:
+      - ENVIRONMENT=development
+      - HOST=0.0.0.0
+      - PORT=8001
+      - JWT_SECRET=${JWT_SECRET}
+      - DATABASE_URL=${DATABASE_URL}
+      - MONGODB_URI=${MONGODB_URI}
+      - REDIS_URL=${REDIS_URL}
+      - RABBITMQ_URL=${RABBITMQ_URL}
+      - IPFS_HOST=ipfs
+      - IPFS_PORT=5001
+      - CORS_ORIGINS=${CORS_ORIGIN}
+    depends_on:
+      - postgres
+      - mongodb
+      - redis
+      - rabbitmq
+      - ipfs
+    networks:
+      - forensic-network
+    restart: unless-stopped
+
+  # Frontend (React CRA dev server)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      # CRA reads these at dev server startup
+      - REACT_APP_EVIDENCE_SERVICE_URL=http://localhost:3001/api/v1
+      - REACT_APP_AI_SERVICE_URL=http://localhost:8001
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - evidence-service
+      - ai-analysis-service
+    networks:
+      - forensic-network
+    restart: unless-stopped
+
+  # Smart Contracts
+  smart-contracts:
+    build:
+      context: ./smart-contracts
+      dockerfile: Dockerfile
+      target: dev
+    ports:
+      - "8545:8545"
+    environment:
+      - NODE_ENV=development
+      - SEPOLIA_RPC_URL=${SEPOLIA_RPC_URL}
+      - AMOY_RPC_URL=${AMOY_RPC_URL}
+      - PRIVATE_KEY=${PRIVATE_KEY}
+      - ETHERSCAN_API_KEY=${ETHERSCAN_API_KEY}
+      - POLYGONSCAN_API_KEY=${POLYGONSCAN_API_KEY}
+    volumes:
+      - ./smart-contracts:/app
+      - /app/node_modules
+      - contract-deployments:/app/deployments
+    networks:
+      - forensic-network
+    restart: unless-stopped
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=forensic_db
+      - POSTGRES_USER=forensic_user
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - forensic-network
+    restart: unless-stopped
+
+  # MongoDB
+  mongodb:
+    image: mongo:7
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+      - MONGO_INITDB_DATABASE=evidence_db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - forensic-network
+    restart: unless-stopped
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - forensic-network
+    restart: unless-stopped
+
+  # RabbitMQ
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=password
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - forensic-network
+    restart: unless-stopped
+
+  # IPFS
+  ipfs:
+    image: ipfs/kubo:latest
+    environment:
+      - IPFS_PROFILE=server
+    ports:
+      - "4001:4001"
+      - "5001:5001"
+      - "8080:8080"
+    volumes:
+      - ipfs-data:/data/ipfs
+    networks:
+      - forensic-network
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  mongodb-data:
+  redis-data:
+  rabbitmq-data:
+  ipfs-data:
+  evidence-uploads:
+  evidence-logs:
+  contract-deployments:
+
+networks:
+  forensic-network:
+    driver: bridge

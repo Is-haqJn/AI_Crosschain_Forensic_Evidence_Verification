@@ -1,0 +1,37 @@
+{
+  "timestamp": "2025-09-09T23:28:49.787Z",
+  "networks": {
+    "sepolia": {
+      "chainId": 11155111,
+      "deployer": "0xD0F81690D1c481D9199F783d6E3d4F8F7fa2c73e",
+      "contracts": {
+        "evidenceRegistry": {
+          "address": "0x316988454D4f101f9399DFc00779c3B5825af2B3",
+          "transactionHash": "0x6e84e76a850a5da2e022afb17bc847aa4f6a7d18b1e00e8575cb3bb60c988776",
+          "blockNumber": null
+        },
+        "bridge": {
+          "address": "0x708acdeE14D0Daf6F9270077b28660706A1B5e8F",
+          "transactionHash": "0xafcdc4464b8687b480c5d98ae6122475eb27f2670924822bfe427acb8dda8e0d",
+          "blockNumber": null
+        }
+      }
+    },
+    "amoy": {
+      "chainId": 80002,
+      "deployer": "0xD0F81690D1c481D9199F783d6E3d4F8F7fa2c73e",
+      "contracts": {
+        "evidenceRegistry": {
+          "address": "0xf13c14B48BBc7a466739650c0f83f9BFaefc7B9F",
+          "transactionHash": "0x0bc1a762383bad6cf1bdf37817bbb7f899818af04340875f18badfbbc0f33f5f",
+          "blockNumber": null
+        },
+        "bridge": {
+          "address": "0xBb4C38c350Da3B3654ad20F0f3f3015Cd0F3Bcd5",
+          "transactionHash": "0xb97a7d72eb6ef0cc210536ca54e09e0c1730fc5343b20398d127eb32da480d74",
+          "blockNumber": null
+        }
+      }
+    }
+  }
+}

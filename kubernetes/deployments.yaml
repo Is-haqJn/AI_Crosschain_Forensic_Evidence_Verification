@@ -1,0 +1,93 @@
+# namespace.yaml
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: forensic-system
+
+---
+# configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: forensic-config
+  namespace: forensic-system
+data:
+  NODE_ENV: "production"
+  IPFS_HOST: "ipfs-service"
+  IPFS_PORT: "5001"
+  SEPOLIA_RPC_URL: "https://sepolia.infura.io/v3/your_infura_key"
+  AMOY_RPC_URL: "https://rpc-amoy.polygon.technology/"
+
+---
+# secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: forensic-secrets
+  namespace: forensic-system
+type: Opaque
+stringData:
+  DATABASE_URL: "postgresql://forensic_user:forensic_pass@postgres-service:5432/forensic_db"
+  MONGODB_URI: "mongodb://mongo_user:mongo_pass@mongodb-service:27017/evidence_db"
+  REDIS_URL: "redis://:redis_pass@redis-service:6379"
+  RABBITMQ_URL: "amqp://rabbitmq_user:rabbitmq_pass@rabbitmq-service:5672"
+  JWT_SECRET: "your_jwt_secret_key_here"
+  PRIVATE_KEY: "your_private_key_here"
+
+---
+# postgres-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: forensic-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        env:
+        - name: POSTGRES_USER
+          value: forensic_user
+        - name: POSTGRES_PASSWORD
+          value: forensic_pass
+        - name: POSTGRES_DB
+          value: forensic_db
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: forensic-system
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432

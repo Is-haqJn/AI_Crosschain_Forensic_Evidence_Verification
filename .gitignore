@@ -1,0 +1,131 @@
+# Environment variables - NEVER commit these!
+.env
+.env.local
+.env.production
+.env.*.local
+*.env
+
+# Private keys and secrets
+*.key
+*.pem
+*.p12
+*.pfx
+private_key.txt
+secrets.json
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# TypeScript
+dist/
+build/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+
+# Logs
+logs/
+**/logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.nyc_output/
+test-results/
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Blockchain
+artifacts/
+cache/
+typechain/
+typechain-types/
+deployments/localhost/
+deployments/hardhat/
+
+# IPFS
+ipfs_staging/
+ipfs_data/
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+postgres_data/
+mongodb_data/
+
+# Uploads
+uploads/
+**/uploads/
+temp/
+tmp/
+
+# OS Files
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Backup files
+*.backup
+*.bak
+*.swp
+*.swo
+*~
+
+# Package files
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Monitoring
+prometheus_data/
+grafana_data/
+
+# Certificates (except public certs)
+*.crt
+*.cer
+*.der
+!public_cert.crt
+
+# Keep these
+!.env.example
+!.gitkeep
+
+# Secrets and sensitive directories
+secrets/
+
+# Tests (excluded from VCS per workspace policy)
+tests/
+
+# Temp scratch files
+tmp_*.txt

@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: forensic-evidence
+  labels:
+    app: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: forensic-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            # Note: CRA reads env at build time; these are for documentation or runtime configs if used by the app
+            - name: REACT_APP_EVIDENCE_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: frontend-config
+                  key: REACT_APP_EVIDENCE_SERVICE_URL
+            - name: REACT_APP_AI_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: frontend-config
+                  key: REACT_APP_AI_SERVICE_URL
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+      restartPolicy: Always
+

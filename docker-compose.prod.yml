@@ -1,0 +1,235 @@
+version: '3.8'
+
+# Production Docker Compose with Docker Secrets
+# Implements OWASP 2025 security best practices for secrets management
+
+services:
+  # Evidence Service with Secrets
+  evidence-service:
+    build:
+      context: ./microservices/evidence-service
+      dockerfile: Dockerfile
+      target: production
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      # Using _FILE suffix pattern for secrets
+      - DATABASE_URL_FILE=/run/secrets/database_url
+      - MONGODB_URI_FILE=/run/secrets/mongodb_uri
+      - REDIS_URL_FILE=/run/secrets/redis_url
+      - RABBITMQ_URL_FILE=/run/secrets/rabbitmq_url
+      - JWT_SECRET_FILE=/run/secrets/jwt_secret
+      - JWT_REFRESH_SECRET_FILE=/run/secrets/jwt_refresh_secret
+      - PRIVATE_KEY_FILE=/run/secrets/private_key
+      - ENCRYPTION_KEY_FILE=/run/secrets/encryption_key
+      # Non-sensitive configuration
+      - IPFS_HOST=ipfs
+      - IPFS_PORT=5001
+      - IPFS_PROTOCOL=http
+      - SEPOLIA_RPC_URL=${SEPOLIA_RPC_URL}
+      - AMOY_RPC_URL=${AMOY_RPC_URL}
+      - CONTRACT_ADDRESS_SEPOLIA=${CONTRACT_ADDRESS_SEPOLIA}
+      - CONTRACT_ADDRESS_AMOY=${CONTRACT_ADDRESS_AMOY}
+      - BRIDGE_CONTRACT_SEPOLIA=${BRIDGE_CONTRACT_SEPOLIA}
+      - BRIDGE_CONTRACT_AMOY=${BRIDGE_CONTRACT_AMOY}
+      - AI_SERVICE_URL=http://ai-analysis-service:8001
+      - MAX_FILE_SIZE=${MAX_FILE_SIZE}
+      - ALLOWED_FILE_TYPES=${ALLOWED_FILE_TYPES}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+    secrets:
+      - source: database_url
+        target: database_url
+        uid: "1000"
+        gid: "1000"
+        mode: "0400"
+      - source: mongodb_uri
+        target: mongodb_uri
+        uid: "1000"
+        gid: "1000"
+        mode: "0400"
+      - source: redis_url
+        target: redis_url
+        uid: "1000"
+        gid: "1000"
+        mode: "0400"
+      - source: rabbitmq_url
+        target: rabbitmq_url
+        uid: "1000"
+        gid: "1000"
+        mode: "0400"
+      - source: jwt_secret
+        target: jwt_secret
+        uid: "1000"
+        gid: "1000"
+        mode: "0400"
+      - source: jwt_refresh_secret
+        target: jwt_refresh_secret
+        uid: "1000"
+        gid: "1000"
+        mode: "0400"
+      - source: private_key
+        target: private_key
+        uid: "1000"
+        gid: "1000"
+        mode: "0400"
+      - source: encryption_key
+        target: encryption_key
+        uid: "1000"
+        gid: "1000"
+        mode: "0400"
+    volumes:
+      - evidence-uploads:/app/uploads
+      - evidence-logs:/app/logs
+    depends_on:
+      - postgres
+      - mongodb
+      - redis
+      - rabbitmq
+      - ipfs
+    networks:
+      - forensic-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+
+  # PostgreSQL with secrets
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=forensic_db
+      - POSTGRES_USER=forensic_user
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+    secrets:
+      - source: postgres_password
+        target: postgres_password
+        uid: "999"
+        gid: "999"
+        mode: "0400"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - forensic-network
+    restart: unless-stopped
+
+  # MongoDB with secrets
+  mongodb:
+    image: mongo:7
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD_FILE=/run/secrets/mongo_password
+      - MONGO_INITDB_DATABASE=evidence_db
+    secrets:
+      - source: mongo_password
+        target: mongo_password
+        uid: "999"
+        gid: "999"
+        mode: "0400"
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - forensic-network
+    restart: unless-stopped
+
+  # Redis with secrets
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass-file /run/secrets/redis_password
+    secrets:
+      - source: redis_password
+        target: redis_password
+        uid: "999"
+        gid: "999"
+        mode: "0400"
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - forensic-network
+    restart: unless-stopped
+
+  # RabbitMQ with secrets
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS_FILE=/run/secrets/rabbitmq_password
+    secrets:
+      - source: rabbitmq_password
+        target: rabbitmq_password
+        uid: "999"
+        gid: "999"
+        mode: "0400"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - forensic-network
+    restart: unless-stopped
+
+  # IPFS
+  ipfs:
+    image: ipfs/kubo:latest
+    ports:
+      - "4001:4001"
+      - "5001:5001"
+      - "8080:8080"
+    volumes:
+      - ipfs-data:/data/ipfs
+    networks:
+      - forensic-network
+    restart: unless-stopped
+
+# Docker Secrets Configuration
+secrets:
+  database_url:
+    file: ./secrets/database_url.txt
+  mongodb_uri:
+    file: ./secrets/mongodb_uri.txt
+  redis_url:
+    file: ./secrets/redis_url.txt
+  rabbitmq_url:
+    file: ./secrets/rabbitmq_url.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+  jwt_refresh_secret:
+    file: ./secrets/jwt_refresh_secret.txt
+  private_key:
+    file: ./secrets/private_key.txt
+  encryption_key:
+    file: ./secrets/encryption_key.txt
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+  mongo_password:
+    file: ./secrets/mongo_password.txt
+  redis_password:
+    file: ./secrets/redis_password.txt
+  rabbitmq_password:
+    file: ./secrets/rabbitmq_password.txt
+
+volumes:
+  postgres-data:
+  mongodb-data:
+  redis-data:
+  rabbitmq-data:
+  ipfs-data:
+  evidence-uploads:
+  evidence-logs:
+
+networks:
+  forensic-network:
+    driver: bridge

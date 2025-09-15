@@ -1,0 +1,13 @@
+---
+description: These rules are very important
+globs:
+alwaysApply: true
+---
+1. No test files or demos or placeholder code. Only real Implementations relevant to the architecture.
+2. Never hallucinate and solve a problem. take your time to analyse the context of the issue and solve it with high reasoning. Search the web and train yourself if you need tp.
+3. Dont create simplefiles or try to simplify the architecture
+4. No deprecated dependencies with memory leaks or security issues. always search the web when you need to use dependencies and see ones that are compatible with others. if they are not, we can find the best alternative. Never install a deprecated one. Pay attention to warnings in the console.
+5. Take your time and understand the entire architecture to see how best you can implement the other features
+6. Make sure you update the docs with what worked, what didnt work, how you fixed the issues, the commands you used and the currentr state of the project and what you learnt. do this for every task.
+7. Be genuine and honest and give me production ready code.
+8. Update the packages and anywhere where we use dependencies so taht when we containerise it it still works

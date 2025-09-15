@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build:*)",
+      "WebSearch",
+      "Bash(npm audit:*)",
+      "Bash(node:*)",
+      "Bash(npm outdated)",
+      "Bash(npm install)",
+      "Bash(npm install:*)",
+      "Bash(docker-compose:*)",
+      "Bash(npm run dev:*)",
+      "Bash(timeout:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(curl:*)",
+      "Bash(docker volume:*)",
+      "Bash(export ENCRYPTION_KEY=test-encryption-key-for-development)",
+      "Bash(docker run:*)",
+      "Bash(docker system:*)",
+      "Bash(docker:*)",
+      "Bash(find:*)",
+      "Bash(for service in auth-service blockchain-service crosschain-service notification-service ai-analysis-service)",
+      "Bash(do echo \"=== $service ===\")",
+      "Bash(ls:*)",
+      "Bash(done)",
+      "Bash(ENCRYPTION_KEY=test-encryption-key-for-development docker-compose -f docker-compose.dev.yml up --build -d)",
+      "Bash(pkill:*)",
+      "Bash(npm run start:prod:*)",
+      "Bash(npm show:*)",
+      "Bash(npm run seed-admin:*)",
+      "Bash(tree:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

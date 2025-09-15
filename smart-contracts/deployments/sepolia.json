@@ -1,0 +1,16 @@
+{
+  "chainId": 11155111,
+  "deployer": "0xD0F81690D1c481D9199F783d6E3d4F8F7fa2c73e",
+  "contracts": {
+    "evidenceRegistry": {
+      "address": "0x316988454D4f101f9399DFc00779c3B5825af2B3",
+      "transactionHash": "0x6e84e76a850a5da2e022afb17bc847aa4f6a7d18b1e00e8575cb3bb60c988776",
+      "blockNumber": null
+    },
+    "bridge": {
+      "address": "0x708acdeE14D0Daf6F9270077b28660706A1B5e8F",
+      "transactionHash": "0xafcdc4464b8687b480c5d98ae6122475eb27f2670924822bfe427acb8dda8e0d",
+      "blockNumber": null
+    }
+  }
+}

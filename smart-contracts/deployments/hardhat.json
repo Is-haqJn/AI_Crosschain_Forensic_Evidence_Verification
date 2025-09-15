@@ -1,0 +1,21 @@
+{
+  "network": "hardhat",
+  "chainId": "1337",
+  "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "timestamp": "2025-09-09T23:14:48.930Z",
+  "contracts": {
+    "evidenceRegistry": {
+      "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+      "transactionHash": "0xb970b9e9f659ef3461a5cda9d76aee49f986fe679ba215e39d93f3a032421e1c",
+      "blockNumber": 1
+    },
+    "bridge": null
+  },
+  "roles": {
+    "DEFAULT_ADMIN_ROLE": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "INVESTIGATOR_ROLE": "0xc3ac62daf0e88d582bbd53046cc181f59cd6389ae21d9040d16b031515185649",
+    "VALIDATOR_ROLE": "0x21702c8af46127c7fa207f89d0b0a8441bb32959a0ac7df790e9ab1a25c98926",
+    "AUDITOR_ROLE": "0x59a1c48e5837ad7a7f3dcedcbe129bf3249ec4fbf651fd4f5e2600ead39fe2f5",
+    "BRIDGE_ROLE": "0x52ba824bfabc2bcfcdf7f0edbb486ebb05e1836c90e78047efeb949990f72e5f"
+  }
+}

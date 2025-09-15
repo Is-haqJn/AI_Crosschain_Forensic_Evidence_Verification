@@ -1,0 +1,95 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: contract-deployment
+  namespace: forensic-system
+  labels:
+    app: contract-deployment
+    version: "1.0.0"
+    component: smart-contracts
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 1800
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: contract-deployment
+        version: "1.0.0"
+        component: smart-contracts
+    spec:
+      serviceAccountName: contract-deployment
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+      containers:
+      - name: smart-contracts
+        image: forensic-contracts:latest
+        imagePullPolicy: Never  # For kind local images
+        command: ["npm", "run", "deploy:crosschain"]
+        env:
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: service-config
+              key: NODE_ENV
+        - name: SEPOLIA_RPC_URL
+          valueFrom:
+            secretKeyRef:
+              name: blockchain-secrets
+              key: SEPOLIA_RPC_URL
+        - name: AMOY_RPC_URL
+          valueFrom:
+            secretKeyRef:
+              name: blockchain-secrets
+              key: AMOY_RPC_URL
+        - name: PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: blockchain-secrets
+              key: PRIVATE_KEY
+        - name: ETHERSCAN_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: blockchain-secrets
+              key: ETHERSCAN_API_KEY
+        - name: POLYGONSCAN_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: blockchain-secrets
+              key: POLYGONSCAN_API_KEY
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: deployments
+          mountPath: /app/deployments
+      volumes:
+      - name: deployments
+        persistentVolumeClaim:
+          claimName: contract-deployments-pvc
+      restartPolicy: Never
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: contract-deployment
+  namespace: forensic-system
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: contract-deployments-pvc
+  namespace: forensic-system
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

@@ -1,0 +1,252 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: evidence-service
+  namespace: forensic-system
+  labels:
+    app: evidence-service
+    version: "1.0.0"
+    component: microservice
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: evidence-service
+  template:
+    metadata:
+      labels:
+        app: evidence-service
+        version: "1.0.0"
+        component: microservice
+    spec:
+      serviceAccountName: evidence-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+      containers:
+      - name: evidence-service
+        image: evidence-service:latest
+        imagePullPolicy: Never  # For kind local images
+        ports:
+        - containerPort: 3001
+          name: http
+          protocol: TCP
+        env:
+        # Service Configuration
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: service-config
+              key: NODE_ENV
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: service-config
+              key: PORT
+        # Database Configuration
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: evidence-secrets
+              key: DATABASE_URL
+        - name: MONGODB_URI
+          valueFrom:
+            secretKeyRef:
+              name: evidence-secrets
+              key: MONGODB_URI
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: evidence-secrets
+              key: REDIS_URL
+        - name: RABBITMQ_URL
+          valueFrom:
+            secretKeyRef:
+              name: evidence-secrets
+              key: RABBITMQ_URL
+        # IPFS Configuration
+        - name: IPFS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: service-config
+              key: IPFS_HOST
+        - name: IPFS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: service-config
+              key: IPFS_PORT
+        - name: IPFS_PROTOCOL
+          valueFrom:
+            configMapKeyRef:
+              name: service-config
+              key: IPFS_PROTOCOL
+        # Blockchain Configuration
+        - name: SEPOLIA_RPC_URL
+          valueFrom:
+            secretKeyRef:
+              name: blockchain-secrets
+              key: SEPOLIA_RPC_URL
+        - name: AMOY_RPC_URL
+          valueFrom:
+            secretKeyRef:
+              name: blockchain-secrets
+              key: AMOY_RPC_URL
+        - name: CONTRACT_ADDRESS_SEPOLIA
+          valueFrom:
+            configMapKeyRef:
+              name: contract-addresses
+              key: CONTRACT_ADDRESS_SEPOLIA
+        - name: CONTRACT_ADDRESS_AMOY
+          valueFrom:
+            configMapKeyRef:
+              name: contract-addresses
+              key: CONTRACT_ADDRESS_AMOY
+        - name: BRIDGE_CONTRACT_SEPOLIA
+          valueFrom:
+            configMapKeyRef:
+              name: contract-addresses
+              key: BRIDGE_CONTRACT_SEPOLIA
+        - name: BRIDGE_CONTRACT_AMOY
+          valueFrom:
+            configMapKeyRef:
+              name: contract-addresses
+              key: BRIDGE_CONTRACT_AMOY
+        - name: PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: blockchain-secrets
+              key: PRIVATE_KEY
+        # JWT Configuration
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: evidence-secrets
+              key: JWT_SECRET
+        - name: JWT_REFRESH_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: evidence-secrets
+              key: JWT_REFRESH_SECRET
+        - name: JWT_EXPIRY
+          valueFrom:
+            configMapKeyRef:
+              name: service-config
+              key: JWT_EXPIRY
+        - name: JWT_REFRESH_EXPIRY
+          valueFrom:
+            configMapKeyRef:
+              name: service-config
+              key: JWT_REFRESH_EXPIRY
+        # Security
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: evidence-secrets
+              key: ENCRYPTION_KEY
+        # File Upload Configuration
+        - name: MAX_FILE_SIZE
+          valueFrom:
+            configMapKeyRef:
+              name: service-config
+              key: MAX_FILE_SIZE
+        - name: ALLOWED_FILE_TYPES
+          valueFrom:
+            configMapKeyRef:
+              name: service-config
+              key: ALLOWED_FILE_TYPES
+        # CORS Configuration
+        - name: CORS_ORIGIN
+          valueFrom:
+            configMapKeyRef:
+              name: service-config
+              key: CORS_ORIGIN
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3001
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: uploads
+          mountPath: /app/uploads
+        - name: logs
+          mountPath: /app/logs
+      volumes:
+      - name: uploads
+        persistentVolumeClaim:
+          claimName: evidence-uploads-pvc
+      - name: logs
+        persistentVolumeClaim:
+          claimName: evidence-logs-pvc
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: evidence-service
+  namespace: forensic-system
+  labels:
+    app: evidence-service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3001
+    targetPort: 3001
+    protocol: TCP
+    name: http
+  selector:
+    app: evidence-service
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: evidence-service
+  namespace: forensic-system
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: evidence-uploads-pvc
+  namespace: forensic-system
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: evidence-logs-pvc
+  namespace: forensic-system
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi

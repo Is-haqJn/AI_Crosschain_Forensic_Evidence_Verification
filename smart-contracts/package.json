@@ -1,0 +1,129 @@
+{
+  "name": "forensic-evidence-smart-contracts",
+  "version": "1.0.0",
+  "description": "Smart contracts for AI Cross-Chain Forensic Evidence System",
+  "main": "index.js",
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "compile": "hardhat compile",
+    "compile:docker": "hardhat compile --force",
+    "test": "hardhat test",
+    "test:coverage": "hardhat coverage",
+    "test:ci": "hardhat test --reporter json > test-results.json",
+    "deploy:localhost": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
+    "deploy:amoy": "hardhat run scripts/deploy.js --network amoy",
+    "deploy:crosschain": "hardhat run scripts/deploy-crosschain.js --network sepolia",
+    "verify:sepolia": "hardhat verify --network sepolia",
+    "verify:amoy": "hardhat verify --network amoy",
+    "clean": "hardhat clean",
+    "clean:docker": "hardhat clean && rm -rf node_modules/.cache",
+    "node": "hardhat node",
+    "console": "hardhat console",
+    "size": "hardhat size-contracts",
+    "gas-report": "REPORT_GAS=true hardhat test",
+    "lint": "solhint 'contracts/**/*.sol'",
+    "lint:fix": "solhint 'contracts/**/*.sol' --fix",
+    "format": "prettier --write 'contracts/**/*.sol' 'scripts/**/*.js' 'test/**/*.js'",
+    "docker:build": "docker build -t forensic-contracts .",
+    "docker:run": "docker run --rm -v $(pwd)/deployments:/app/deployments forensic-contracts",
+    "k8s:deploy": "kubectl apply -f k8s/",
+    "k8s:delete": "kubectl delete -f k8s/",
+    "k8s:logs": "kubectl logs -f job/contract-deployment",
+    "k8s:status": "kubectl get jobs -l app=contract-deployment"
+  },
+  "keywords": [
+    "blockchain",
+    "ethereum",
+    "polygon",
+    "smart-contracts",
+    "forensics",
+    "evidence",
+    "hardhat",
+    "solidity",
+    "docker",
+    "kubernetes",
+    "cross-chain",
+    "bridge"
+  ],
+  "author": "Forensic Evidence System Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/forensic-evidence-system.git",
+    "directory": "smart-contracts"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/forensic-evidence-system/issues"
+  },
+  "homepage": "https://github.com/your-org/forensic-evidence-system#readme",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
+    "@nomicfoundation/hardhat-ethers": "^4.0.0",
+    "@nomicfoundation/hardhat-network-helpers": "^3.0.0",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@nomicfoundation/hardhat-verify": "^3.0.2",
+    "@typechain/ethers-v6": "^0.5.0",
+    "@typechain/hardhat": "^9.1.0",
+    "@types/chai": "^5.2.2",
+    "@types/mocha": ">=9.1.0",
+    "@types/node": ">=22.0.0",
+    "chai": "^6.0.1",
+    "ethers": "^6.4.0",
+    "hardhat": "^2.26.0",
+    "hardhat-gas-reporter": "^2.3.0",
+    "solidity-coverage": "^0.8.0",
+    "typechain": "^8.3.0"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.4.0",
+    "dotenv": "^17.2.2"
+  },
+  "os": [
+    "linux",
+    "darwin",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "config": {
+    "compilation_timeout": 300000,
+    "deployment_timeout": 600000,
+    "gas_limit": 3000000
+  },
+  "docker": {
+    "base_image": "node:18-alpine",
+    "build_context": ".",
+    "build_args": {
+      "NODE_ENV": "production"
+    }
+  },
+  "kubernetes": {
+    "namespace": "forensic-system",
+    "labels": {
+      "app": "contract-deployment",
+      "version": "1.0.0",
+      "component": "smart-contracts"
+    },
+    "resources": {
+      "requests": {
+        "memory": "512Mi",
+        "cpu": "500m"
+      },
+      "limits": {
+        "memory": "1Gi",
+        "cpu": "1000m"
+      }
+    },
+    "job_config": {
+      "backoffLimit": 3,
+      "activeDeadlineSeconds": 1800,
+      "ttlSecondsAfterFinished": 3600
+    }
+  }
+}

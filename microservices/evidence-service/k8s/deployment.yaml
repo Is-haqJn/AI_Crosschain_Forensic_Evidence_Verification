@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: evidence-service
+  namespace: forensic-evidence
+  labels:
+    app: evidence-service
+    component: evidence-management
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: evidence-service
+  template:
+    metadata:
+      labels:
+        app: evidence-service
+        component: evidence-management
+    spec:
+      containers:
+      - name: evidence-service
+        image: evidence-service:latest
+        ports:
+        - containerPort: 3001
+          name: http
+        - containerPort: 9092
+          name: metrics
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        envFrom:
+        - configMapRef:
+            name: evidence-service-config
+        - secretRef:
+            name: evidence-service-secrets
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 3001
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: temp-storage
+          mountPath: /app/temp
+        - name: uploads-storage
+          mountPath: /app/uploads
+        - name: logs-storage
+          mountPath: /app/logs
+      volumes:
+      - name: temp-storage
+        emptyDir:
+          sizeLimit: 5Gi
+      - name: uploads-storage
+        emptyDir:
+          sizeLimit: 10Gi
+      - name: logs-storage
+        emptyDir:
+          sizeLimit: 1Gi
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30

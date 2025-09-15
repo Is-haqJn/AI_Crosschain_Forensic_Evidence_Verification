@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  # Databases
+  postgres:
+    image: postgres:15-alpine
+    container_name: forensic-postgres
+    environment:
+      POSTGRES_USER: forensic_user
+      POSTGRES_PASSWORD: forensic_pass
+      POSTGRES_DB: forensic_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - forensic-network
+
+  mongodb:
+    image: mongo:6.0
+    container_name: forensic-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mongo_user
+      MONGO_INITDB_ROOT_PASSWORD: mongo_pass
+      MONGO_INITDB_DATABASE: evidence_db
+    volumes:
+      - mongodb_data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - forensic-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: forensic-redis
+    command: redis-server --requirepass redis_pass
+    ports:
+      - "6379:6379"
+    networks:
+      - forensic-network
+
+  # Message Queue
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: forensic-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: rabbitmq_user
+      RABBITMQ_DEFAULT_PASS: rabbitmq_pass
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - forensic-network
+
+  # IPFS Node
+  ipfs:
+    image: ipfs/kubo:latest
+    container_name: forensic-ipfs
+    environment:
+      IPFS_PROFILE: server
+    volumes:
+      - ipfs_staging:/export
+      - ipfs_data:/data/ipfs
+    ports:
+      - "4001:4001"
+      - "5001:5001"
+      - "8080:8080"
+    networks:
+      - forensic-network
+
+networks:
+  forensic-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  rabbitmq_data:
+  ipfs_staging:
+  ipfs_data:
