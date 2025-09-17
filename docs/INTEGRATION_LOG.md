@@ -11,6 +11,7 @@
 - Rebuilt/restarted `evidence-service` and verified the smart-contract artifacts are available via `ls /smart-contracts/artifacts/contracts`.
 - Generated a fresh admin JWT (`node generate-token.js`) and used it to call `GET /api/v1/evidence/:id/verify?network=sepolia`, confirming `{ verified: true, onChain: true }` is returned.
 - UI note: log out/in (or clear `auth_token`) before verifying so the frontend uses the fresh token; the “Failed to verify on blockchain” toast was caused by the missing ABI and expired JWT.
+ - Cross-chain defaults aligned with architecture: submit on `sepolia`, verify on `amoy`.
 ### 2025-09-17
 - Fixed frontend login `ERR_EMPTY_RESPONSE` by wrapping all auth route handlers with centralized async error handling.
 - Note: Webpack Dev Server websocket `ws://localhost:3000/ws` warnings are benign in dev; they do not affect app behavior.
@@ -22,6 +23,10 @@ Changes:
 - `smart-contracts/package.json`
   - Kept `hardhat` on `^2.26.0` to match plugin peer ranges.
   - Retained `@nomicfoundation/hardhat-toolbox@5.0.0`; removed explicit `@nomicfoundation/hardhat-ethers` and `@nomicfoundation/hardhat-chai-matchers` duplicate pins.
+ - `frontend/src/services/evidenceService.ts`: separate env defaults: `REACT_APP_SUBMIT_NETWORK=sepolia`, `REACT_APP_VERIFY_NETWORK=amoy`.
+ - `frontend/src/pages/EvidenceList.tsx` and `frontend/src/pages/EvidenceDetail.tsx`: buttons use those envs.
+ - `microservices/evidence-service/src/controllers/EvidenceController.ts`: `submitToBlockchain` default is `sepolia`; `verifyOnBlockchain` default remains `amoy`.
+ - `docker-compose.dev.yml`: exports `REACT_APP_SUBMIT_NETWORK` and `REACT_APP_VERIFY_NETWORK` for the frontend.
 
 Verification:
 - Restart evidence-service or let nodemon reload.

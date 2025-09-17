@@ -103,14 +103,14 @@ export const EvidenceDetail: React.FC = () => {
             <div className="space-x-2">
               <button
                 disabled={onChain || submitMutation.isLoading}
-                onClick={() => submitMutation.mutate({ network: 'sepolia' })}
+                onClick={() => submitMutation.mutate({ network: process.env.REACT_APP_SUBMIT_NETWORK || 'sepolia' })}
                 className={`px-3 py-1 rounded-md text-white ${onChain ? 'bg-gray-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
               >
                 Submit
               </button>
               <button
                 disabled={verifyMutation.isLoading}
-                onClick={() => verifyMutation.mutate({ network: 'sepolia' })}
+                onClick={() => verifyMutation.mutate({ network: process.env.REACT_APP_VERIFY_NETWORK || 'amoy' })}
                 className="px-3 py-1 rounded-md text-indigo-700 border border-indigo-200 hover:bg-indigo-50"
               >
                 Verify

@@ -338,7 +338,7 @@ export class EvidenceController {
 
       const result = await this.blockchainService.submitEvidence(
         id,
-        network || 'sepolia',
+        (network as string) || 'sepolia',
         req.user.id
       );
 
@@ -373,7 +373,7 @@ export class EvidenceController {
 
       const result = await this.blockchainService.verifyEvidence(
         id,
-        (network as string) || 'sepolia'
+        (network as string) || 'amoy'
       );
 
       res.status(200).json({
@@ -566,3 +566,4 @@ export class EvidenceController {
 }
 
 export default EvidenceController;
+

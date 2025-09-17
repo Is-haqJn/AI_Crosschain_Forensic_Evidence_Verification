@@ -8,6 +8,8 @@ import {
 } from '../types';
 
 const API_BASE_URL = process.env.REACT_APP_EVIDENCE_SERVICE_URL || 'http://localhost:3001/api/v1';
+const SUBMIT_NETWORK_DEFAULT = process.env.REACT_APP_SUBMIT_NETWORK || 'sepolia';
+const VERIFY_NETWORK_DEFAULT = process.env.REACT_APP_VERIFY_NETWORK || 'amoy';
 
 class EvidenceService {
   private api = axios.create({
@@ -228,7 +230,7 @@ class EvidenceService {
     return response.data.data;
   }
 
-  async submitToBlockchain(evidenceId: string, network: string = 'sepolia'): Promise<ApiResponse<{ transactionHash: string; blockNumber: number; gasUsed: string }>> {
+  async submitToBlockchain(evidenceId: string, network: string = SUBMIT_NETWORK_DEFAULT): Promise<ApiResponse<{ transactionHash: string; blockNumber: number; gasUsed: string }>> {
     try {
       const response: AxiosResponse<ApiResponse<{ transactionHash: string; blockNumber: number; gasUsed: string }>> =
         await this.api.post(`/evidence/${evidenceId}/blockchain`, { network });
@@ -248,7 +250,7 @@ class EvidenceService {
     }
   }
 
-  async verifyOnBlockchain(evidenceId: string, network: string = 'sepolia'): Promise<ApiResponse<{ verified: boolean; onChain: boolean; blockchainData?: any }>> {
+  async verifyOnBlockchain(evidenceId: string, network: string = VERIFY_NETWORK_DEFAULT): Promise<ApiResponse<{ verified: boolean; onChain: boolean; blockchainData?: any }>> {
     try {
       const response: AxiosResponse<ApiResponse<{ verified: boolean; onChain: boolean; blockchainData?: any }>> =
         await this.api.get(`/evidence/${evidenceId}/verify`, { params: { network } });

@@ -115,14 +115,14 @@ export const EvidenceList: React.FC = () => {
                   <td className="px-6 py-4 text-sm text-right space-x-2">
                     <button
                       disabled={onChain || submitMutation.isLoading}
-                      onClick={() => submitMutation.mutate({ id: e.evidenceId, network: 'sepolia' })}
+                      onClick={() => submitMutation.mutate({ id: e.evidenceId, network: (process.env.REACT_APP_SUBMIT_NETWORK || 'sepolia') })}
                       className={`px-3 py-1 rounded-md text-white ${onChain ? 'bg-gray-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
                     >
                       Submit
                     </button>
                     <button
                       disabled={verifyMutation.isLoading}
-                      onClick={() => verifyMutation.mutate({ id: e.evidenceId, network: 'sepolia' })}
+                      onClick={() => verifyMutation.mutate({ id: e.evidenceId, network: (process.env.REACT_APP_VERIFY_NETWORK || 'amoy') })}
                       className="px-3 py-1 rounded-md text-indigo-700 border border-indigo-200 hover:bg-indigo-50"
                     >
                       Verify

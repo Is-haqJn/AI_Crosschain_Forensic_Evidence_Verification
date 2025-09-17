@@ -101,6 +101,8 @@ services:
       # CRA reads these at dev server startup
       - REACT_APP_EVIDENCE_SERVICE_URL=http://localhost:3001/api/v1
       - REACT_APP_AI_SERVICE_URL=http://localhost:8001
+      - REACT_APP_SUBMIT_NETWORK=sepolia
+      - REACT_APP_VERIFY_NETWORK=amoy
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
     volumes:
