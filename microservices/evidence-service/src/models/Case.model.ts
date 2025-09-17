@@ -21,31 +21,35 @@ export interface ICase extends Document {
 }
 
 const CaseSchema = new Schema<ICase>({
-  caseId: { type: String, required: true, unique: true, index: true },
-  title: { type: String, required: true, index: true },
-  description: { type: String },
+  caseId: { type: String, required: [true, 'caseId is required'], unique: true, index: true, trim: true },
+  title: { type: String, required: [true, 'title is required'], index: true, trim: true, minlength: [1, 'title cannot be empty'] },
+  description: { type: String, trim: true, maxlength: [1000, 'description too long'] },
   status: { type: String, enum: Object.values(CaseStatus), default: CaseStatus.OPEN, index: true },
   leadInvestigator: {
-    userId: { type: String, required: true },
-    name: String,
-    organization: String
+    userId: { type: String, required: [true, 'leadInvestigator.userId is required'], trim: true },
+    name: { type: String, trim: true },
+    organization: { type: String, trim: true }
   },
   participants: [{
-    userId: String,
+    userId: { type: String, trim: true },
     role: { type: String, enum: ['investigator','validator','admin','observer'], default: 'investigator' },
-    name: String,
-    organization: String
+    name: { type: String, trim: true },
+    organization: { type: String, trim: true }
   }],
   evidence: [{
-    evidenceId: { type: String, index: true },
+    evidenceId: { type: String, index: true, trim: true },
     addedAt: { type: Date, default: Date.now },
-    addedBy: String
+    addedBy: { type: String, trim: true }
   }],
   chainOfCustody: [{ type: Schema.Types.Mixed }],
-  tags: [String]
-}, { timestamps: true });
+  tags: [{ type: String, trim: true }]
+}, { timestamps: true, strict: true });
 
-CaseSchema.index({ title: 'text', description: 'text', tags: 1 });
+// Use separate indexes to avoid "Field 'tags' of text index contains an array" errors
+// 1) Text index for title and description
+CaseSchema.index({ title: 'text', description: 'text' });
+// 2) Regular index for tags array
+CaseSchema.index({ tags: 1 });
 
 export const CaseModel = model<ICase>('Case', CaseSchema);
 export default CaseModel;

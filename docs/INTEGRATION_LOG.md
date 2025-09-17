@@ -6,6 +6,29 @@
 
 ## Latest Update: Evidence, AI, and Cases integrated ✅
 
+### 2025-09-18
+- Restored the evidence-service container mount for smart-contract artifacts by re-adding `./smart-contracts:/smart-contracts:ro` in `docker-compose.dev.yml` and recreating the service so the ABI lookup succeeds inside the container.
+- Rebuilt/restarted `evidence-service` and verified the smart-contract artifacts are available via `ls /smart-contracts/artifacts/contracts`.
+- Generated a fresh admin JWT (`node generate-token.js`) and used it to call `GET /api/v1/evidence/:id/verify?network=sepolia`, confirming `{ verified: true, onChain: true }` is returned.
+- UI note: log out/in (or clear `auth_token`) before verifying so the frontend uses the fresh token; the “Failed to verify on blockchain” toast was caused by the missing ABI and expired JWT.
+### 2025-09-17
+- Fixed frontend login `ERR_EMPTY_RESPONSE` by wrapping all auth route handlers with centralized async error handling.
+- Note: Webpack Dev Server websocket `ws://localhost:3000/ws` warnings are benign in dev; they do not affect app behavior.
+- Fixed smart-contracts Docker build failure (ERESOLVE) by aligning back to the previously working baseline: Hardhat v2.26 with toolbox v5. Removed explicit duplicate plugin pins to avoid peer conflicts during Docker `npm install` without a lockfile.
+
+Changes:
+- `microservices/evidence-service/src/routes/AuthRouter.ts`
+  - Wrapped `register`, `login`, `refresh`, `logout`, `me`, and `users` handlers with `ErrorHandler.asyncHandler`.
+- `smart-contracts/package.json`
+  - Kept `hardhat` on `^2.26.0` to match plugin peer ranges.
+  - Retained `@nomicfoundation/hardhat-toolbox@5.0.0`; removed explicit `@nomicfoundation/hardhat-ethers` and `@nomicfoundation/hardhat-chai-matchers` duplicate pins.
+
+Verification:
+- Restart evidence-service or let nodemon reload.
+- `POST http://localhost:3001/api/v1/auth/login` now returns JSON errors (e.g., invalid credentials) instead of closing the connection.
+- CRA websocket warnings can be ignored; HMR still works. If noisy, ensure env: `WDS_SOCKET_HOST=localhost`, `WDS_SOCKET_PORT=3000`, `WDS_SOCKET_PROTOCOL=ws`.
+- Rebuild contracts image: `docker compose -f docker-compose.dev.yml build smart-contracts`
+
 ### Service Status (September 15, 2025)
 - **Evidence Service**: ✅ RUNNING on port 3001 (full app, no minimal server)
 - **AI Analysis Service**: ✅ RUNNING on port 8001 (`/health` 200; added PyJWT)
@@ -203,3 +226,4 @@
 - Backend routes and frontend service configuration aligned.
 - Frontend login supports a proper backend endpoint when available; otherwise uses an env-provided test token only for local development.
  - .gitignore hardened to exclude secrets, uploads, logs, tmp files, and tests.
+

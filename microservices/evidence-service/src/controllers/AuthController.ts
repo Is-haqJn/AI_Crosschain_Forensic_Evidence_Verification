@@ -64,7 +64,7 @@ export class AuthController {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new AppError('Invalid credentials', 401);
 
-    const tokens = this.issueTokens(user.userId, user.email, user.role, user.organization, user.tokenVersion);
+    const tokens = this.issueTokens(user.userId, user.email, user.role, user.organization, user.tokenVersion, user.name);
 
     // Optional: set HttpOnly cookies (access + refresh)
     this.setAuthCookies(res, tokens.accessToken, tokens.refreshToken, this.config.isProduction());
@@ -135,9 +135,13 @@ export class AuthController {
     } });
   }
 
-  private issueTokens(id: string, email: string, role: string, organization: string, tokenVersion: number) {
+  private issueTokens(id: string, email: string, role: string, organization: string, tokenVersion: number, name?: string) {
     const jwtCfg = this.config.get<any>('security.jwt');
-    const accessToken = jwt.sign({ id, email, role, organization }, jwtCfg.secret, {
+    // Normalize legacy roles (e.g., SUPER_ADMIN) to current RBAC set
+    const normalizedRole = (role || '').toLowerCase() === 'super_admin' || (role || '').toUpperCase() === 'SUPER_ADMIN'
+      ? 'admin'
+      : role;
+    const accessToken = jwt.sign({ id, email, role: normalizedRole, organization, name }, jwtCfg.secret, {
       expiresIn: jwtCfg.expiresIn,
       issuer: 'evidence-service',
       audience: 'frontend'

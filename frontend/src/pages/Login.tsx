@@ -26,7 +26,7 @@ export const Login: React.FC = () => {
   const onSubmit = async (data: LoginForm) => {
     try {
       setIsLoading(true);
-      const result = await authService.login(data);
+      // Single login call through context (context persists token and user)
       await login(data.email, data.password);
       navigate(from, { replace: true });
     } catch (error: any) {

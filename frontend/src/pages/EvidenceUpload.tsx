@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { 
   Upload, 
@@ -14,12 +14,14 @@ import {
 import { useForm } from 'react-hook-form';
 import { EvidenceType } from '../types';
 import { evidenceService } from '../services/evidenceService';
+import { caseService } from '../services/caseService';
 import { toast } from 'react-toastify';
 
 interface UploadForm {
   type: EvidenceType;
   description: string;
   caseNumber: string;
+  caseId?: string;
   tags: string;
 }
 
@@ -27,6 +29,7 @@ export const EvidenceUpload: React.FC = () => {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [isUploading, setIsUploading] = useState(false);
+  const [cases, setCases] = useState<Array<{ caseId: string; title: string }>>([]);
 
   const {
     register,
@@ -37,6 +40,19 @@ export const EvidenceUpload: React.FC = () => {
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setUploadedFiles(prev => [...prev, ...acceptedFiles]);
+  }, []);
+
+  useEffect(() => {
+    // Load recent cases for selection
+    (async () => {
+      try {
+        const res: any = await caseService.listCases({ page: 1, limit: 50 });
+        const items = Array.isArray(res?.data) ? res.data : [];
+        setCases(items.map((c: any) => ({ caseId: c.caseId, title: c.title })));
+      } catch (e) {
+        // Non-fatal if cases cannot be loaded
+      }
+    })();
   }, []);
 
   const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
@@ -86,6 +102,7 @@ export const EvidenceUpload: React.FC = () => {
         formData.append('type', data.type);
         if (data.description) formData.append('description', data.description);
         if (data.tags) formData.append('tags', data.tags);
+        if (data.caseId) formData.append('caseId', data.caseId);
 
         await evidenceService.uploadEvidence(formData, (p) => {
           setUploadProgress(prev => ({ ...prev, [file.name]: p.percentage }));
@@ -236,6 +253,22 @@ export const EvidenceUpload: React.FC = () => {
                   className="input"
                   placeholder="Enter case number (optional)"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Link to Case
+                </label>
+                <select
+                  {...register('caseId')}
+                  className="input"
+                >
+                  <option value="">Do not link</option>
+                  {cases.map((c) => (
+                    <option key={c.caseId} value={c.caseId}>{c.title} — {c.caseId}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">Optional: link this evidence to an existing case.</p>
               </div>
 
               <div>

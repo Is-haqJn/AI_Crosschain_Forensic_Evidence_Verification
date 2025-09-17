@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { ConfigManager } from '../config/ConfigManager.js';
 import { Logger } from '../utils/Logger.js';
+import { User } from '../models/User.model.js';
 
 /**
  * Extended Request interface with user property
@@ -50,12 +51,63 @@ export class AuthMiddleware {
       const jwtConfig = this.config.get<any>('security.jwt');
       const decoded = jwt.verify(token, jwtConfig.secret) as any;
 
+      // Derive missing claims if possible (fallback for older tokens)
+      let userId: string | undefined = typeof decoded.id === 'string' && decoded.id.trim() !== '' ? decoded.id : undefined;
+      let email: string | undefined = typeof decoded.email === 'string' && decoded.email.trim() !== '' ? decoded.email : undefined;
+      let roleClaim: string | undefined = typeof decoded.role === 'string' && decoded.role.trim() !== '' ? decoded.role : undefined;
+      let organization: string | undefined = typeof decoded.organization === 'string' ? decoded.organization : undefined;
+
+      // Primary fallback by email if id missing
+      if (!userId && email) {
+        try {
+          const user = await User.findOne({ email });
+          if (user) {
+            userId = user.userId;
+            organization = organization && organization.trim() !== '' ? organization : user.organization;
+            roleClaim = roleClaim || user.role;
+          }
+        } catch (e) {
+          this.logger.warn('User lookup failed during auth fallback', e);
+        }
+      }
+
+      // Secondary enrichment: if org/role still missing, try lookup by id
+      if ((!organization || organization.trim() === '') || !roleClaim) {
+        try {
+          const key = userId ? { userId } : (email ? { email } : null);
+          if (key) {
+            const user = await User.findOne(key as any);
+            if (user) {
+              if (!organization || organization.trim() === '') organization = user.organization;
+              if (!roleClaim) roleClaim = user.role;
+              if (!email) email = user.email;
+              if (!userId) userId = user.userId;
+            }
+          }
+        } catch (e) {
+          this.logger.warn('User enrichment failed during auth fallback', e);
+        }
+      }
+
+      if (!userId || !email || !roleClaim) {
+        this.logger.warn('Invalid token claims after fallback', { hasEmail: !!email, hasId: !!userId, hasRole: !!roleClaim });
+        res.status(401).json({
+          error: 'Invalid token',
+          message: 'Missing required token claims'
+        });
+        return;
+      }
+
+      // Normalize role (map SUPER_ADMIN -> admin; allow ADMIN in any case)
+      const roleUpper = (roleClaim || '').toUpperCase();
+      const normalizedRole = roleUpper === 'SUPER_ADMIN' || roleUpper === 'ADMIN' ? 'admin' : roleClaim;
+
       // Attach user to request
       req.user = {
-        id: decoded.id,
-        email: decoded.email,
-        role: decoded.role,
-        organization: decoded.organization
+        id: userId,
+        email,
+        role: normalizedRole,
+        organization: (organization && organization.trim() !== '') ? organization : 'Unknown'
       };
 
       this.logger.debug('User authenticated', { userId: decoded.id });

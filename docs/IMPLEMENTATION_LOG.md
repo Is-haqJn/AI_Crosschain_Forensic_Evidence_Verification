@@ -1,3 +1,36 @@
+## 2025-09-15 – Fix case creation 400 and favicon 500
+- Auth fixes (same date):
+  - Backend `AuthMiddleware.authenticate` now validates required JWT claims (`id`, `email`, `role`, `organization`) and rejects tokens missing any of them with 401, preventing confusing downstream 400s.
+  - Frontend `Login.tsx` now performs a single login through `AuthContext.login` to avoid redundant calls; token is stored and used automatically by API services.
+
+
+- What was happening:
+  - Frontend POST `http://localhost:3001/api/v1/cases` returned 400 (Bad Request) when creating a case with whitespace title; backend requires non-empty `title` and validates via Joi/Mongoose.
+  - Browser requested `/favicon.ico` and got 500 due to missing asset/serving path.
+
+- What changed:
+  - Frontend `CasesList.tsx`: trim inputs and improve error toast to surface backend validation details.
+    - File: `frontend/src/pages/CasesList.tsx`
+    - Change: send `{ title: title.trim(), description: (description||'').trim() }` and refine error parsing of `error.details`.
+  - Favicon:
+    - Added `frontend/public/favicon.svg` and updated `frontend/public/index.html` to prefer SVG, fall back to ICO.
+    - Updated `frontend/public/manifest.json` to include both SVG and ICO entries.
+
+- Why it works:
+  - Trimming prevents empty-string titles from failing backend validation; error toast now displays Joi/Mongoose field messages when present.
+  - Providing an actual favicon file and correct links eliminates the 500 on `/favicon.ico` while enabling modern SVG favicons.
+
+- Commands used:
+  - None required beyond dev server reload; changes are static assets and React code.
+
+- Current state:
+  - Case creation succeeds when a non-empty title is provided; backend still correctly returns 400 for invalid payloads, now clearly surfaced to the user.
+  - Favicon loads without server errors.
+
+- Notes / next steps:
+  - Ensure a valid JWT is present in `localStorage.auth_token` since `/api/v1/cases` is authenticated by `AuthMiddleware`.
+  - Consider adding a minimal client-side required marker and helper text for the title field.
+
 # AI Analysis Layer Implementation Log
 
 ## Development Timeline and Process Documentation

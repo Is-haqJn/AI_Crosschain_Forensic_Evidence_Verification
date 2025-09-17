@@ -15,6 +15,8 @@ interface AdminUser {
   username: string;
   email: string;
   role: string;
+  name: string;
+  organization: string;
   permissions: string[];
   createdAt: Date;
   isActive: boolean;
@@ -41,6 +43,8 @@ class AdminSeeder {
         username: 'admin',
         email: 'admin@forensic-system.local',
         role: 'SUPER_ADMIN',
+        name: 'System Administrator',
+        organization: 'Forensic Evidence System',
         permissions: [
           'evidence:read',
           'evidence:write',
@@ -95,6 +99,8 @@ class AdminSeeder {
           userId: adminUser.id,
           username: adminUser.username,
           role: adminUser.role,
+          name: adminUser.name,
+          organization: adminUser.organization,
           permissions: adminUser.permissions
         },
         jwtCfg.secret,

@@ -1,19 +1,19 @@
 import { Router } from 'express';
 import { CaseController } from '../controllers/CaseController.js';
 import { AuthMiddleware } from '../middleware/AuthMiddleware.js';
-// import { ValidationMiddleware } from '../middleware/ValidationMiddleware.js';
+import ValidationMiddleware from '../middleware/ValidationMiddleware.js';
 
 export class CaseRouter {
   private router: Router;
   private controller: CaseController;
   private auth: AuthMiddleware;
-  // private validate: ValidationMiddleware; // reserved for future validation
+  private validate: ValidationMiddleware;
 
   constructor() {
     this.router = Router();
     this.controller = new CaseController();
     this.auth = new AuthMiddleware();
-    // this.validate = new ValidationMiddleware();
+    this.validate = new ValidationMiddleware();
     this.init();
   }
 
@@ -22,6 +22,9 @@ export class CaseRouter {
     this.router.post(
       '/',
       this.auth.authenticate.bind(this.auth),
+      this.validate.validate(
+        (ValidationMiddleware as any)['__CASE_CREATE_SCHEMA__']
+      ),
       this.controller.create.bind(this.controller)
     );
 

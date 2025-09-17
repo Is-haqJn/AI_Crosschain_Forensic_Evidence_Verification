@@ -116,7 +116,7 @@ export class ConfigManager {
           }
         },
         wallet: {
-          privateKey: process.env.WALLET_PRIVATE_KEY || '',
+          privateKey: process.env.PRIVATE_KEY || process.env.WALLET_PRIVATE_KEY || '',
           mnemonic: process.env.WALLET_MNEMONIC || ''
         },
         gasConfig: {

@@ -71,12 +71,11 @@ export class CrossChainService {
       if (walletConfig.privateKey) {
         const wallet = new ethers.Wallet(walletConfig.privateKey, provider);
         this.wallets.set(network, wallet);
-        
-        // Load contract if address is available
-        if (networkConfig.contractAddress && networkConfig.contractAddress !== '0x0000000000000000000000000000000000000000') {
-          this.loadContract(network, networkConfig.contractAddress);
-        }
       }
+
+      // Load contract if address is available (even without wallet; will connect signer on submit)
+      const address = this.resolveContractAddress(network, networkConfig.contractAddress);
+      if (address) this.loadContract(network, address);
       
       this.logger.info(`Network initialized: ${network}`);
     } catch (error) {
@@ -117,28 +116,70 @@ export class CrossChainService {
   private loadContract(network: string, contractAddress: string): void {
     try {
       // Load ABI from artifacts
-      const abiPath = path.join(
-        __dirname,
-        '../../../smart-contracts/artifacts/contracts/ForensicEvidenceRegistry.sol/ForensicEvidenceRegistry.json'
-      );
+      const abiPath = this.resolveAbiPath();
       
-      if (fs.existsSync(abiPath)) {
+      if (abiPath && fs.existsSync(abiPath)) {
         const artifact = JSON.parse(fs.readFileSync(abiPath, 'utf8'));
         const wallet = this.wallets.get(network);
-        
-        if (wallet) {
-          const contract = new ethers.Contract(
-            contractAddress,
-            artifact.abi,
-            wallet
-          );
-          this.contracts.set(network, contract);
-          this.logger.info(`Contract loaded for ${network}: ${contractAddress}`);
+        const provider = this.providers.get(network);
+
+        if (!provider) {
+          this.logger.error(`No provider available for ${network}, cannot load contract`);
+          return;
         }
+
+        const runner = wallet ?? provider;
+        const contract = new ethers.Contract(
+          contractAddress,
+          artifact.abi,
+          runner
+        );
+        this.contracts.set(network, contract);
+        this.logger.info(`Contract loaded for ${network}: ${contractAddress} (runner=${wallet ? 'wallet' : 'provider'})`);
       }
     } catch (error) {
       this.logger.error(`Failed to load contract for ${network}`, error);
     }
+  }
+
+  /** Resolve ABI path from mounted artifacts */
+  private resolveAbiPath(): string | null {
+    const candidates = [
+      // When running from dist, __dirname is /app/dist/services
+      path.join(__dirname, '../../../smart-contracts/artifacts/contracts/ForensicEvidenceRegistry.sol/ForensicEvidenceRegistry.json'),
+      // In case relative resolution changes
+      path.join(process.cwd(), 'smart-contracts/artifacts/contracts/ForensicEvidenceRegistry.sol/ForensicEvidenceRegistry.json'),
+      // Mounted at container root
+      '/smart-contracts/artifacts/contracts/ForensicEvidenceRegistry.sol/ForensicEvidenceRegistry.json'
+    ];
+    for (const p of candidates) {
+      if (fs.existsSync(p)) return p;
+    }
+    this.logger.error('ABI file not found in expected locations');
+    return null;
+  }
+
+  /** Resolve contract address from env or deployments JSON */
+  private resolveContractAddress(network: string, envAddress?: string): string | null {
+    if (envAddress && /^0x[a-fA-F0-9]{40}$/.test(envAddress)) return envAddress;
+    try {
+      const deploymentsPath = path.join(__dirname, '../../../smart-contracts/deployments', `${network}.json`);
+      if (fs.existsSync(deploymentsPath)) {
+        const j = JSON.parse(fs.readFileSync(deploymentsPath, 'utf8'));
+        const addr = j?.contracts?.evidenceRegistry?.address;
+        if (addr && /^0x[a-fA-F0-9]{40}$/.test(addr)) return addr;
+      }
+      const altPath = `/smart-contracts/deployments/${network}.json`;
+      if (fs.existsSync(altPath)) {
+        const j = JSON.parse(fs.readFileSync(altPath, 'utf8'));
+        const addr = j?.contracts?.evidenceRegistry?.address;
+        if (addr && /^0x[a-fA-F0-9]{40}$/.test(addr)) return addr;
+      }
+    } catch (e) {
+      this.logger.error(`Failed to resolve contract address for ${network}`, e);
+    }
+    this.logger.error(`Contract address not set for ${network}`);
+    return null;
   }
 
   /**
@@ -169,11 +210,16 @@ export class CrossChainService {
         throw new AppError('Evidence already on blockchain', 409);
       }
       
-      // Get contract
-      const contract = this.contracts.get(network);
-      if (!contract) {
+      // Get contract and wallet
+      const baseContract = this.contracts.get(network);
+      if (!baseContract) {
         throw new AppError(`Contract not available for network: ${network}`, 503);
       }
+      const wallet = this.wallets.get(network);
+      if (!wallet) {
+        throw new AppError(`Wallet not configured for network: ${network}`, 503);
+      }
+      const contract = baseContract.connect(wallet);
       
       // Prepare transaction
       const dataHash = '0x' + evidence.dataHash;
@@ -186,7 +232,7 @@ export class CrossChainService {
       });
       
       // Submit to blockchain
-      const tx = await contract.submitEvidence(
+      const tx = await (contract as any).submitEvidence(
         evidence.ipfsHash,
         dataHash,
         evidenceType,
@@ -197,10 +243,14 @@ export class CrossChainService {
       
       // Wait for confirmation
       const receipt = await tx.wait();
-      
+      const transactionHash = (receipt as any)?.transactionHash ?? (receipt as any)?.hash ?? tx.hash;
+      if (!transactionHash) {
+        this.logger.warn('Transaction hash missing from receipt', { evidenceId, network });
+      }
+
       // Update evidence with blockchain data
       evidence.blockchainData = {
-        transactionHash: receipt.transactionHash,
+        transactionHash: transactionHash || tx.hash,
         blockNumber: receipt.blockNumber,
         chainId: Number((await contract.runner!.provider!.getNetwork()).chainId),
         contractAddress: await contract.getAddress(),
@@ -213,12 +263,12 @@ export class CrossChainService {
       
       this.logger.info(`Evidence submitted to blockchain`, {
         evidenceId,
-        transactionHash: receipt.transactionHash,
+        transactionHash: transactionHash || tx.hash,
         blockNumber: receipt.blockNumber
       });
       
       return {
-        transactionHash: receipt.transactionHash,
+        transactionHash: transactionHash || tx.hash,
         blockNumber: receipt.blockNumber,
         gasUsed: receipt.gasUsed.toString()
       };
@@ -418,3 +468,4 @@ export class CrossChainService {
 }
 
 export default CrossChainService;
+

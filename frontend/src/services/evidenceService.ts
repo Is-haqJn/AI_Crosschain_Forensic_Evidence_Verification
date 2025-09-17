@@ -239,7 +239,12 @@ class EvidenceService {
 
       return response.data;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to submit to blockchain');
+      const status = error?.response?.status;
+      const msg = error?.response?.data?.error?.message || error?.response?.data?.message || error?.message;
+      if (status === 402 && msg && msg.toLowerCase().includes('insufficient')) {
+        throw new Error('Wallet needs test ETH on selected network. Please fund and retry.');
+      }
+      throw new Error(msg || 'Failed to submit to blockchain');
     }
   }
 
@@ -282,6 +287,21 @@ class EvidenceService {
       return response.data.data;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Failed to fetch evidence metadata');
+    }
+  }
+
+  async getRecentActivity(limit: number = 10): Promise<Array<{ id: string; type: string; description: string; timestamp: string; user: string }>> {
+    try {
+      const response: AxiosResponse<ApiResponse<Array<{ id: string; type: string; description: string; timestamp: string; user: string }>>> =
+        await this.api.get(`/activity`, { params: { limit } });
+
+      if (!response.data.success || !Array.isArray(response.data.data)) {
+        throw new Error(response.data.message || 'Failed to fetch recent activity');
+      }
+
+      return response.data.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to fetch recent activity');
     }
   }
 }

@@ -10,7 +10,7 @@ export const CasesList: React.FC = () => {
   const [description, setDescription] = useState('');
   const { data, isLoading, isError } = useQuery(['cases', { page: 1, limit: 10 }], () => caseService.listCases({ page: 1, limit: 10 }), { refetchOnWindowFocus: false });
 
-  const createMutation = useMutation(() => caseService.createCase({ title, description }), {
+  const createMutation = useMutation(() => caseService.createCase({ title: title.trim(), description: (description || '').trim() }), {
     onSuccess: () => {
       toast.success('Case created');
       setTitle('');
@@ -18,7 +18,12 @@ export const CasesList: React.FC = () => {
       queryClient.invalidateQueries('cases');
     },
     onError: (e: any) => {
-      toast.error(e.message || 'Failed to create case');
+      const err = e?.response?.data?.error;
+      const details = Array.isArray(err?.details)
+        ? err.details.map((d: any) => (typeof d === 'string' ? d : d?.message)).filter(Boolean).join('; ')
+        : '';
+      const msg = (details || err?.message || e?.message || 'Failed to create case').toString();
+      toast.error(msg);
     }
   });
 
@@ -67,7 +72,7 @@ export const CasesList: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <input className="input" placeholder="Title" value={title} onChange={e => setTitle(e.target.value)} />
               <input className="input" placeholder="Description" value={description} onChange={e => setDescription(e.target.value)} />
-              <button className="btn-primary" disabled={!title || createMutation.isLoading} onClick={() => createMutation.mutate()}>Create</button>
+              <button className="btn-primary" disabled={!title.trim() || createMutation.isLoading} onClick={() => createMutation.mutate()}>Create</button>
             </div>
           </div>
         </div>

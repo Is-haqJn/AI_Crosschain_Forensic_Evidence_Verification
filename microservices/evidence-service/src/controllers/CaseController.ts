@@ -2,18 +2,25 @@ import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../middleware/AuthMiddleware.js';
 import { CaseService } from '../services/CaseService.js';
 import { AppError } from '../middleware/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
 
 export class CaseController {
   private caseService: CaseService;
+  private logger: Logger;
 
   constructor() {
     this.caseService = new CaseService();
+    this.logger = Logger.getInstance();
   }
 
   public async create(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       if (!req.user) throw new AppError('User not authenticated', 401);
-      const { title, description, tags } = req.body;
+      const { title, description, tags } = req.body || {};
+      this.logger.info('Create case request', { title, description, tags, userId: req.user.id });
+      if (!title || typeof title !== 'string' || title.trim().length === 0) {
+        throw new AppError('Title is required', 400);
+      }
       const c = await this.caseService.createCase({
         title,
         description,
@@ -22,6 +29,20 @@ export class CaseController {
       });
       res.status(201).json({ success: true, data: c });
     } catch (error) {
+      // Surface mongoose validation details if present
+      const anyErr: any = error as any;
+      this.logger.warn('Create case validation error', {
+        name: anyErr?.name,
+        message: anyErr?.message,
+        keys: anyErr?.errors ? Object.keys(anyErr.errors) : null,
+        errors: anyErr?.errors || null
+      });
+      if (anyErr && anyErr.name === 'ValidationError' && anyErr.errors) {
+        const details = Object.keys(anyErr.errors).map((k) => anyErr.errors[k]?.message).filter(Boolean).join('; ');
+        const appErr = new AppError(details || 'Validation error', 400);
+        (appErr as any).errors = anyErr.errors; // attach field-level details so handler can format
+        return next(appErr);
+      }
       next(error);
     }
   }

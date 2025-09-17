@@ -57,8 +57,25 @@ export class ErrorHandler {
     }
 
     // Handle specific error types
+    const anyErr: any = error as any;
+    if (anyErr && (anyErr.code === 'INSUFFICIENT_FUNDS' || (typeof anyErr.message === 'string' && anyErr.message.toLowerCase().includes('insufficient funds')))) {
+      return new AppError('Blockchain wallet has insufficient funds on the selected network. Please fund the configured account with test ETH and try again.', 402);
+    }
     if (error.name === 'ValidationError') {
-      return new AppError('Validation error', 400);
+      // Preserve detailed validation message from source (e.g., Mongoose)
+      const mongooseDetails = anyErr?.errors ? Object.keys(anyErr.errors).map((k) => anyErr.errors[k]?.message).filter(Boolean) : [];
+      const joiDetails: any[] = Array.isArray(anyErr?.details) ? anyErr.details : [];
+      const appErr = new AppError(
+        (mongooseDetails.length ? mongooseDetails.join('; ') : '') || anyErr?.message || 'Validation error',
+        400
+      );
+      if (anyErr?.errors && typeof anyErr.errors === 'object') {
+        (appErr as any).errors = anyErr.errors; // Mongoose field-level details
+      }
+      if (joiDetails.length) {
+        (appErr as any).details = joiDetails; // Joi details array
+      }
+      return appErr;
     }
 
     if (error.name === 'CastError') {
@@ -120,6 +137,16 @@ export class ErrorHandler {
         timestamp: new Date().toISOString()
       }
     };
+
+    // Attach validation details if available
+    const anyErr: any = error as any;
+    if (anyErr?.errors && typeof anyErr.errors === 'object') {
+      response.error.details = Object.keys(anyErr.errors).map((k) => ({ field: k, message: anyErr.errors[k]?.message }));
+    }
+    if (Array.isArray(anyErr?.details)) {
+      const mapped = anyErr.details.map((d: any) => ({ field: Array.isArray(d?.path) ? d.path.join('.') : d?.path, message: d?.message }));
+      response.error.details = Array.isArray(response.error.details) ? [...response.error.details, ...mapped] : mapped;
+    }
 
     // Include stack trace in development
     if (isDevelopment && error.stack) {

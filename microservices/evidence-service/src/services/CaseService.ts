@@ -17,19 +17,28 @@ export class CaseService {
     tags?: string[];
     lead: { userId: string; name?: string; organization?: string };
   }): Promise<ICase> {
-    const caseId = uuidv4();
-    const c = new CaseModel({
-      caseId,
-      title: data.title,
-      description: data.description,
-      status: CaseStatus.OPEN,
-      leadInvestigator: data.lead,
-      participants: [{ userId: data.lead.userId, role: 'investigator', name: data.lead.name, organization: data.lead.organization }],
-      tags: data.tags || []
-    });
-    await c.save();
-    this.logger.info('Case created', { caseId });
-    return c;
+    try {
+      const caseId = uuidv4();
+      const c = new CaseModel({
+        caseId,
+        title: (data.title || '').trim(),
+        description: data.description,
+        status: CaseStatus.OPEN,
+        leadInvestigator: data.lead,
+        participants: [{ userId: data.lead.userId, role: 'investigator', name: data.lead.name, organization: data.lead.organization }],
+        tags: data.tags || []
+      });
+      await c.save();
+      this.logger.info('Case created', { caseId });
+      return c;
+    } catch (error: any) {
+      // Let the global error handler surface mongoose validation messages verbatim
+      if (error?.name === 'ValidationError') {
+        throw error;
+      }
+      this.logger.error('Failed to create case', error);
+      throw error;
+    }
   }
 
   async listCases(filters: any, pagination: { page: number; limit: number; sortBy?: string; sortOrder?: 'asc'|'desc' }): Promise<{ cases: ICase[]; total: number }> {

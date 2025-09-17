@@ -48,6 +48,7 @@ services:
       - /app/node_modules
       - evidence-uploads:/app/uploads
       - evidence-logs:/app/logs
+      - ./smart-contracts:/smart-contracts:ro
     depends_on:
       - postgres
       - mongodb
@@ -72,10 +73,10 @@ services:
       - HOST=0.0.0.0
       - PORT=8001
       - JWT_SECRET=${JWT_SECRET}
-      - DATABASE_URL=${DATABASE_URL}
-      - MONGODB_URI=${MONGODB_URI}
-      - REDIS_URL=${REDIS_URL}
-      - RABBITMQ_URL=${RABBITMQ_URL}
+      - DATABASE_URL=postgresql://forensic_user:password@postgres:5432/forensic_db
+      - MONGODB_URI=mongodb://admin:password@mongodb:27017/ai_analysis_db?authSource=admin
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://admin:password@rabbitmq:5672
       - IPFS_HOST=ipfs
       - IPFS_PORT=5001
       - CORS_ORIGINS=${CORS_ORIGIN}

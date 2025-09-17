@@ -130,37 +130,17 @@ export const Dashboard: React.FC = () => {
   const pendingAnalysis = evidence.filter(e => e.status === 'PROCESSING').length;
   const completedAnalysis = evidence.filter(e => e.status === 'ANALYZED').length;
 
-  // Mock recent activity data
-  const recentActivity = [
+  const { data: recentActivity = [], isLoading: activityLoading } = useQuery(
+    ['recent-activity'],
+    () => evSvc.getRecentActivity(10),
     {
-      id: '1',
-      type: 'upload',
-      description: 'New evidence uploaded: crime_scene_photo_001.jpg',
-      timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-      user: 'John Doe'
-    },
-    {
-      id: '2',
-      type: 'analysis',
-      description: 'AI analysis completed for evidence #EV-2024-001',
-      timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-      user: 'System'
-    },
-    {
-      id: '3',
-      type: 'verification',
-      description: 'Evidence #EV-2024-002 verified by Jane Smith',
-      timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-      user: 'Jane Smith'
-    },
-    {
-      id: '4',
-      type: 'upload',
-      description: 'New evidence uploaded: witness_statement.pdf',
-      timestamp: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-      user: 'Mike Johnson'
+      refetchInterval: 60000,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+      refetchOnMount: false,
+      enabled: !!token,
     }
-  ];
+  );
 
   return (
     <div className="space-y-8">
@@ -241,7 +221,7 @@ export const Dashboard: React.FC = () => {
           <h3 className="text-sm font-medium text-gray-700">Recent Activity</h3>
         </div>
         <div className="card-body">
-          {isInitialLoading ? (
+          {isInitialLoading || activityLoading ? (
             <SkeletonText lines={5} />
           ) : (
             <div className="space-y-4">
