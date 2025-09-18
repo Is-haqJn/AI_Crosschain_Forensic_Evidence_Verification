@@ -7,10 +7,11 @@ The **Forensic Evidence System** is a production-ready, enterprise-grade microse
 ## 🏗️ Architecture Overview
 
 ### Microservices Architecture
-The system follows a microservices pattern with two core services:
+The system follows a microservices pattern with these core services:
 
-1. **Evidence Service** (Node.js/TypeScript) - Core evidence management
-2. **AI Analysis Service** (Python/FastAPI) - Advanced AI-powered analysis
+1. **Evidence Service** (Node.js/TypeScript) - Core evidence management; blockchain submission; cross-chain bridging and verification; rate limiting; indexing and health.
+2. **AI Analysis Service** (Python/FastAPI) - Advanced AI-powered analysis with queueing; status endpoints; health/metrics.
+3. **Smart Contracts** (Solidity/Hardhat) - `ForensicEvidenceRegistry` deployed on Sepolia and Amoy; addresses resolved from `smart-contracts/deployments`.
 
 ### Technology Stack
 
@@ -47,10 +48,10 @@ The system follows a microservices pattern with two core services:
 - **Priority Queues**: Configurable analysis priorities
 
 ### Blockchain Integration
-- **Immutable Records**: Evidence hashes stored on blockchain
-- **Cross-Chain Support**: Multi-network compatibility
-- **Smart Contracts**: Automated verification
-- **Gas Optimization**: Efficient transaction management
+- **Immutable Records**: Evidence hashes stored on Sepolia with optional mirror on Amoy
+- **Cross-Chain Support**: Auto-bridge to target network (configurable)
+- **Verification**: Source-chain verification first, then target-chain verification; avoids DB-only checks
+- **Gas Optimization**: Network-specific gas limits (e.g., 500k on Amoy)
 
 ### Security & Compliance
 - **JWT Authentication**: Secure API access
@@ -105,6 +106,7 @@ src/
 ### Inter-Service Communication
 - **HTTP/REST**: Synchronous communication
 - **Message Queues**: Asynchronous processing
+- **Frontend Polling**: Exponential backoff for AI status; direct AI status calls to avoid proxy rate limits
 - **Service Discovery**: Kubernetes DNS-based discovery
 - **Health Checks**: Comprehensive health monitoring
 
@@ -118,11 +120,11 @@ src/
 - `GET /api/v1/evidence/ai-analysis/types` - Get supported analysis types
 
 #### AI Analysis Service (`http://localhost:8001`)
-- `POST /api/v1/submit` - Submit evidence for analysis
-- `GET /api/v1/status/:analysis_id` - Get analysis status
-- `GET /api/v1/results/:analysis_id` - Get analysis results
-- `GET /api/v1/types` - Get supported analysis types
-- `GET /api/v1/queue/status` - Get queue status
+- `POST /api/v1/analysis/submit` - Submit evidence for analysis
+- `GET /api/v1/analysis/status/:analysis_id` - Get analysis status
+- `GET /api/v1/analysis/results/:analysis_id` - Get analysis results
+- `GET /api/v1/analysis/types` - Get supported analysis types
+- `GET /api/v1/analysis/queue/status` - Get queue status
 
 ## 📈 Performance & Scalability
 

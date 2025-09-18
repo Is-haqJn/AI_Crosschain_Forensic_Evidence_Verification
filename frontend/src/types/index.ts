@@ -35,6 +35,7 @@ export interface Evidence {
   chainOfCustody: CustodyEntry[];
   aiAnalysis?: AIAnalysisResult;
   blockchainData?: BlockchainData;
+  crossChainData?: CrossChainData;
   createdAt: string;
   updatedAt: string;
 }
@@ -210,11 +211,19 @@ export interface AudioAnalysis {
 export interface BlockchainData {
   transactionHash: string;
   blockNumber: number;
-  gasUsed: number;
+  gasUsed: number | string;
   timestamp: string;
   network: string;
   contractAddress: string;
 }
+
+export interface CrossChainData {
+  bridged: boolean;
+  targetChain?: number;
+  bridgeTransactionHash?: string;
+  bridgeTimestamp?: string;
+}
+
 
 // API Response Types
 export interface ApiResponse<T = any> {

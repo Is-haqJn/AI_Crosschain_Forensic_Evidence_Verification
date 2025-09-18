@@ -70,6 +70,8 @@ export class EvidenceController {
         deviceInfo: req.body.deviceInfo ? JSON.parse(req.body.deviceInfo) : undefined,
         type: req.body.type,
         tags: req.body.tags ? req.body.tags.split(',') : [],
+        caseId: typeof req.body.caseId === 'string' && req.body.caseId.trim() !== '' ? req.body.caseId.trim() : undefined,
+        caseNumber: typeof req.body.caseNumber === 'string' && req.body.caseNumber.trim() !== '' ? req.body.caseNumber.trim() : undefined,
         submitter: {
           userId: req.user.id,
           name: req.user.email,
@@ -430,24 +432,28 @@ export class EvidenceController {
         throw new AppError('User not authenticated', 401);
       }
 
-      const result = await this.evidenceService.submitForAIAnalysis(
-        id,
-        analysisType,
-        priority || 5,
-        req.user.id
-      );
-
-      this.logger.info('Evidence submitted for AI analysis', {
-        evidenceId: id,
-        analysisType,
-        priority,
-        userId: req.user.id
+      // Fire-and-forget to avoid long client waits. We'll persist analysis once created.
+      setImmediate(async () => {
+        try {
+          const result = await this.evidenceService.submitForAIAnalysis(
+            id,
+            analysisType,
+            priority || 5,
+            req.user!.id
+          );
+          this.logger.info('Evidence submitted for AI analysis (bg)', {
+            evidenceId: id,
+            analysisType,
+            priority,
+            userId: req.user!.id,
+            analysisId: result?.analysisId
+          });
+        } catch (err) {
+          this.logger.error('Background AI analysis submission failed', err);
+        }
       });
 
-      res.status(200).json({
-        success: true,
-        data: result
-      });
+      res.status(202).json({ success: true, message: 'Analysis started' });
     } catch (error) {
       next(error);
     }

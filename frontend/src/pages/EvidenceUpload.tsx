@@ -12,6 +12,7 @@ import {
   Cloud
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
+import { useQueryClient } from 'react-query';
 import { EvidenceType } from '../types';
 import { evidenceService } from '../services/evidenceService';
 import { caseService } from '../services/caseService';
@@ -26,6 +27,7 @@ interface UploadForm {
 }
 
 export const EvidenceUpload: React.FC = () => {
+  const queryClient = useQueryClient();
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [isUploading, setIsUploading] = useState(false);
@@ -103,12 +105,38 @@ export const EvidenceUpload: React.FC = () => {
         if (data.description) formData.append('description', data.description);
         if (data.tags) formData.append('tags', data.tags);
         if (data.caseId) formData.append('caseId', data.caseId);
-
-        await evidenceService.uploadEvidence(formData, (p) => {
+        const ev = await evidenceService.uploadEvidence(formData, (p) => {
           setUploadProgress(prev => ({ ...prev, [file.name]: p.percentage }));
         });
 
         toast.success(`${file.name} uploaded successfully`);
+
+        // Optimistically update common caches and trigger refetches where needed
+        try {
+          // Evidence list pages
+          queryClient.invalidateQueries('evidence');
+          queryClient.setQueryData(['evidence', { page: 1, limit: 10 }], (old: any) => {
+            if (!old) return old;
+            const current = Array.isArray(old?.data) ? old.data : [];
+            return { ...old, data: [ev, ...current].slice(0, 10) };
+          });
+
+          // Dashboard evidence snapshot
+          queryClient.invalidateQueries('evidence-list');
+          queryClient.setQueryData('evidence-list', (old: any) => {
+            if (!old) return old;
+            const current = Array.isArray(old?.data) ? old.data : [];
+            return { ...old, data: [ev, ...current].slice(0, 10) };
+          });
+
+          // Recent activity feed
+          queryClient.invalidateQueries('recent-activity');
+          
+          // Analysis results list (if auto-analysis is enabled)
+          queryClient.invalidateQueries('analysis-evidence');
+        } catch (_) {
+          // non-fatal cache update failure
+        }
       }
 
       // Reset after all uploads finish

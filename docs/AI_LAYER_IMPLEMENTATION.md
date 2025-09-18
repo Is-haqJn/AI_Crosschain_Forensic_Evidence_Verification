@@ -213,8 +213,9 @@ AUDIO_MAX_SIZE=104857600
 1. **Evidence Upload** → Evidence Service receives file
 2. **Analysis Request** → Evidence Service calls AI Service
 3. **Background Processing** → AI Service processes evidence
-4. **Result Callback** → AI Service sends results back
-5. **Blockchain Storage** → Results stored on-chain for immutability
+4. **Status Polling (Frontend)** → Frontend auto-polls status with exponential backoff and rate-limit handling
+5. **Result Retrieval** → Evidence Service or Frontend retrieves results directly from AI service
+6. **Blockchain Storage (optional)** → Result hashes can be stored on-chain for integrity
 
 ### API Integration Points
 ```typescript
@@ -229,10 +230,29 @@ const analysisResponse = await fetch('http://localhost:8001/api/v1/analysis/subm
 });
 ```
 
+### Frontend Status Polling & Backoff (Implemented)
+- The frontend starts polling immediately after a successful submit, showing inline row status ("Queued…", "Processing", progress % when available).
+- Poll interval begins at ~3s and backs off exponentially on 429/5xx (observing Retry-After where present).
+- To avoid rate-limiting on the evidence-service proxy, the UI switches to call the AI service status endpoint directly once the `analysisId` is known.
+- Polling stops on terminal states: `completed | failed | error` and triggers query invalidation for the affected evidence row.
+
+Pseudocode (client-side):
+```
+function pollAnalysis(evidenceId) {
+  let delayMs = 3000; let attempt = 0;
+  while (!terminal) {
+    const id = ensureAnalysisId(evidenceId); // fetch evidence if needed
+    const r = GET aiService.status(id);
+    if (r.status in [completed, failed, error]) break;
+    if (r.code === 429 || r.code >= 500) delayMs = backoff(delayMs, attempt++);
+    sleep(delayMs);
+  }
+}
+```
+
 ### Cross-Chain Storage
-- Analysis results hashed and stored on Sepolia/Amoy networks
-- Tamper-proof evidence trail
-- Smart contract verification
+- Result hashing is supported; storage on Sepolia/Amoy is optional and driven by evidence-service policies.
+- Integrity guarantees rely on content hashing; when persisted on-chain, target contracts provide tamper-evidence.
 
 ## Analysis Capabilities by Type
 
@@ -279,7 +299,7 @@ const analysisResponse = await fetch('http://localhost:8001/api/v1/analysis/subm
 - **Audio Voice ID**: 87%
 
 ### Scalability
-- **Concurrent Analyses**: 10 (configurable)
+- **Concurrent Analyses**: 10 (configurable via service settings)
 - **Queue Size**: 100 requests
 - **Batch Processing**: Supported
 - **Auto-scaling**: Docker/Kubernetes ready

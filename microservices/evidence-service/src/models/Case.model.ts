@@ -21,7 +21,7 @@ export interface ICase extends Document {
 }
 
 const CaseSchema = new Schema<ICase>({
-  caseId: { type: String, required: [true, 'caseId is required'], unique: true, index: true, trim: true },
+  caseId: { type: String, required: [true, 'caseId is required'], unique: true, trim: true },
   title: { type: String, required: [true, 'title is required'], index: true, trim: true, minlength: [1, 'title cannot be empty'] },
   description: { type: String, trim: true, maxlength: [1000, 'description too long'] },
   status: { type: String, enum: Object.values(CaseStatus), default: CaseStatus.OPEN, index: true },

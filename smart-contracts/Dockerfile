@@ -15,13 +15,13 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
-RUN npm install --only=production && npm cache clean --force
+RUN npm install --only=production --legacy-peer-deps && npm cache clean --force
 
 # Development stage
 FROM base AS dev
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 COPY . .
 EXPOSE 8545
 CMD ["npm", "run", "node"]
@@ -30,7 +30,7 @@ CMD ["npm", "run", "node"]
 FROM base AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 COPY . .
 
 # Compile contracts

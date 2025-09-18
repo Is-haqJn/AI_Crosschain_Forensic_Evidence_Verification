@@ -11,6 +11,14 @@ const API_BASE_URL = process.env.REACT_APP_EVIDENCE_SERVICE_URL || 'http://local
 const SUBMIT_NETWORK_DEFAULT = process.env.REACT_APP_SUBMIT_NETWORK || 'sepolia';
 const VERIFY_NETWORK_DEFAULT = process.env.REACT_APP_VERIFY_NETWORK || 'amoy';
 
+type SubmitBlockchainResult = {
+  transactionHash: string;
+  blockNumber: number;
+  gasUsed: string;
+  network?: string;
+  bridge?: { targetNetwork: string; transactionHash: string; chainId: number } | null;
+};
+
 class EvidenceService {
   private api = axios.create({
     baseURL: API_BASE_URL,
@@ -141,18 +149,18 @@ class EvidenceService {
     }
   }
 
-  async submitForAIAnalysis(evidenceId: string, analysisType: string): Promise<AIAnalysisResult> {
+  async submitForAIAnalysis(evidenceId: string, analysisType: string): Promise<AIAnalysisResult | { message?: string; status?: string; analysisId?: string }> {
     try {
       const response: AxiosResponse<ApiResponse<AIAnalysisResult>> = 
         await this.api.post(`/evidence/${evidenceId}/ai-analysis`, {
           analysisType
         });
       
-      if (!response.data.success || !response.data.data) {
-        throw new Error(response.data.message || 'Failed to submit for AI analysis');
+      if (!response.data?.success) {
+        throw new Error(response.data?.message || 'Failed to submit for AI analysis');
       }
-
-      return response.data.data;
+      // Backend may return 202 Accepted with only a message and no data payload
+      return response.data.data ?? { message: response.data.message || 'Analysis started', status: 'started' } as any;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Failed to submit for AI analysis');
     }
@@ -230,9 +238,9 @@ class EvidenceService {
     return response.data.data;
   }
 
-  async submitToBlockchain(evidenceId: string, network: string = SUBMIT_NETWORK_DEFAULT): Promise<ApiResponse<{ transactionHash: string; blockNumber: number; gasUsed: string }>> {
+  async submitToBlockchain(evidenceId: string, network: string = SUBMIT_NETWORK_DEFAULT): Promise<ApiResponse<SubmitBlockchainResult>> {
     try {
-      const response: AxiosResponse<ApiResponse<{ transactionHash: string; blockNumber: number; gasUsed: string }>> =
+      const response: AxiosResponse<ApiResponse<SubmitBlockchainResult>> =
         await this.api.post(`/evidence/${evidenceId}/blockchain`, { network });
 
       if (!response.data.success || !response.data.data) {
@@ -252,8 +260,9 @@ class EvidenceService {
 
   async verifyOnBlockchain(evidenceId: string, network: string = VERIFY_NETWORK_DEFAULT): Promise<ApiResponse<{ verified: boolean; onChain: boolean; blockchainData?: any }>> {
     try {
+      const token = localStorage.getItem('auth_token');
       const response: AxiosResponse<ApiResponse<{ verified: boolean; onChain: boolean; blockchainData?: any }>> =
-        await this.api.get(`/evidence/${evidenceId}/verify`, { params: { network } });
+        await this.api.get(`/evidence/${evidenceId}/verify`, { params: { network, ...(token ? { token } : {}) } });
 
       if (!response.data.success || !response.data.data) {
         throw new Error(response.data.message || 'Failed to verify on blockchain');
@@ -309,3 +318,5 @@ class EvidenceService {
 }
 
 export const evidenceService = new EvidenceService();
+
+

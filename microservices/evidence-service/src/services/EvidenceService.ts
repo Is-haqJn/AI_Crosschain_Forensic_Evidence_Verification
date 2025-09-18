@@ -107,6 +107,24 @@ export class EvidenceService {
       } as any);
       await evidence.save();
 
+      // Optionally link to a case by caseId
+      if (data.caseId) {
+        try {
+          const { CaseModel } = await import('../models/Case.model.js');
+          const c = await CaseModel.findOne({ caseId: data.caseId });
+          if (c) {
+            c.evidence = c.evidence || [];
+            c.evidence.push({ evidenceId, addedAt: new Date(), addedBy: data.submitter.userId } as any);
+            await c.save();
+            this.logger.info('Evidence linked to case', { evidenceId, caseId: data.caseId });
+          } else {
+            this.logger.warn('Case not found for linking', { caseId: data.caseId });
+          }
+        } catch (linkErr) {
+          this.logger.warn('Failed to link evidence to case', linkErr);
+        }
+      }
+
       // Publish to message queue for processing
       await this.publishEvidenceEvent('evidence.created', {
         evidenceId,

@@ -99,6 +99,16 @@ export class DatabaseManager {
 
         this.mongoConnection = mongoose.connection;
         
+        // Sync indexes to remove duplicates and ensure proper indexes
+        if (process.env.NODE_ENV !== 'production') {
+          try {
+            await mongoose.syncIndexes();
+            this.logger.info('MongoDB indexes synchronized');
+          } catch (indexError) {
+            this.logger.warn('Failed to sync indexes', indexError);
+          }
+        }
+        
         this.mongoConnection.on('error', (error) => {
           this.logger.error('MongoDB connection error', error);
         });

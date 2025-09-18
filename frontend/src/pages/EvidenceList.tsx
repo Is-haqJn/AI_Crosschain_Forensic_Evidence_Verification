@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { evidenceService } from '../services/evidenceService';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -6,8 +6,35 @@ import { Evidence } from '../types';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 
+const NETWORK_LABELS: Record<string, string> = {
+  sepolia: 'Sepolia',
+  amoy: 'Polygon Amoy',
+};
+
+const CHAIN_LABELS: Record<number, string> = {
+  11155111: 'Sepolia',
+  80002: 'Polygon Amoy',
+};
+
+const formatNetworkName = (network?: string) => {
+  if (!network) return '';
+  return NETWORK_LABELS[network] || network.charAt(0).toUpperCase() + network.slice(1);
+};
+
+const formatChainName = (chainId?: number) => {
+  if (typeof chainId !== 'number') return '';
+  return CHAIN_LABELS[chainId] || `Chain ${chainId}`;
+};
+
+const shortHash = (hash?: string) => {
+  if (!hash) return '';
+  return `${hash.slice(0, 6)}...${hash.slice(-4)}`;
+};
+
 export const EvidenceList: React.FC = () => {
   const queryClient = useQueryClient();
+
+  const [submittingId, setSubmittingId] = useState<string | null>(null);
 
   const { data, isLoading, isError, error } = useQuery(
     ['evidence', { page: 1, limit: 10 }],
@@ -22,13 +49,29 @@ export const EvidenceList: React.FC = () => {
   const submitMutation = useMutation(
     ({ id, network }: { id: string; network: string }) => evidenceService.submitToBlockchain(id, network),
     {
-      onSuccess: () => {
-        toast.success('Submitted to blockchain');
+      onMutate: ({ id }) => {
+        setSubmittingId(id);
+      },
+      onSuccess: (res) => {
+        const payload = res.data;
+        if (payload) {
+          const submittedNetwork = formatNetworkName(payload.network) || 'Network';
+          toast.success(`Submitted on ${submittedNetwork}${payload.transactionHash ? ` (${shortHash(payload.transactionHash)})` : ''}`);
+          if (payload.bridge) {
+            const bridgedNetwork = formatNetworkName(payload.bridge.targetNetwork) || 'Target';
+            toast.success(`Bridged to ${bridgedNetwork}${payload.bridge.transactionHash ? ` (${shortHash(payload.bridge.transactionHash)})` : ''}`);
+          }
+        } else {
+          toast.success('Submitted to blockchain');
+        }
         queryClient.invalidateQueries('evidence');
       },
       onError: (err: any) => {
-        toast.error(err.message || 'Blockchain submission failed');
+        toast.error(err?.message || 'Blockchain submission failed');
       },
+      onSettled: () => {
+        setSubmittingId(null);
+      }
     }
   );
 
@@ -90,7 +133,12 @@ export const EvidenceList: React.FC = () => {
           <tbody className="bg-white divide-y divide-gray-200">
             {items.map((e) => {
               const onChain = Boolean((e as any).blockchainData?.transactionHash);
+              const isBridged = Boolean((e as any).crossChainData?.bridged);
+              const sourceNetwork = (e as any).blockchainData?.network || '';
+              const targetChainId = (e as any).crossChainData?.targetChain;
               const filename = (e as any).metadata?.filename || (e as any).metadata?.originalName || '';
+              const submitDisabled = onChain || submitMutation.isLoading;
+              const isSubmitting = submitMutation.isLoading && submittingId === e.evidenceId;
               return (
                 <tr key={e.evidenceId}>
                   <td className="px-6 py-4 text-sm text-blue-600">
@@ -106,19 +154,36 @@ export const EvidenceList: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-700">{filename}</td>
                   <td className="px-6 py-4 text-sm">
-                    {onChain ? (
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">On-chain</span>
-                    ) : (
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Off-chain</span>
-                    )}
+                    <div className="flex flex-col gap-1">
+                      {onChain ? (
+                        <>
+                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                            Submitted on {formatNetworkName(sourceNetwork) || 'Network'}
+                          </span>
+                          {isBridged && (
+                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                              Bridged to {formatChainName(targetChainId) || 'Target'}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">{isSubmitting ? 'Submitting...' : 'Off-chain'}</span>
+                      )}
+                    </div>
+
                   </td>
                   <td className="px-6 py-4 text-sm text-right space-x-2">
                     <button
-                      disabled={onChain || submitMutation.isLoading}
+                      disabled={submitDisabled}
                       onClick={() => submitMutation.mutate({ id: e.evidenceId, network: (process.env.REACT_APP_SUBMIT_NETWORK || 'sepolia') })}
-                      className={`px-3 py-1 rounded-md text-white ${onChain ? 'bg-gray-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                      className={`px-3 py-1 rounded-md text-white ${submitDisabled ? 'bg-gray-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
                     >
-                      Submit
+                      {isSubmitting ? (
+                        <span className="flex items-center gap-2">
+                          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                          <span>Submitting...</span>
+                        </span>
+                      ) : 'Submit'}
                     </button>
                     <button
                       disabled={verifyMutation.isLoading}
@@ -139,3 +204,5 @@ export const EvidenceList: React.FC = () => {
     </div>
   );
 };
+
+

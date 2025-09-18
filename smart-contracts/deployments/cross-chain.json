@@ -22,8 +22,8 @@
       "deployer": "0xD0F81690D1c481D9199F783d6E3d4F8F7fa2c73e",
       "contracts": {
         "evidenceRegistry": {
-          "address": "0xf13c14B48BBc7a466739650c0f83f9BFaefc7B9F",
-          "transactionHash": "0x0bc1a762383bad6cf1bdf37817bbb7f899818af04340875f18badfbbc0f33f5f",
+          "address": "0xe089B66244998325ef52A27B6972c5Dd3b92b69b",
+          "transactionHash": null,
           "blockNumber": null
         },
         "bridge": {

@@ -16,8 +16,10 @@ export class ValidationMiddleware {
       type: Joi.string().valid('IMAGE', 'VIDEO', 'DOCUMENT', 'AUDIO', 'OTHER').required(),
       location: Joi.string().optional(),
       deviceInfo: Joi.string().optional(),
-      tags: Joi.string().optional()
-    });
+      tags: Joi.string().optional(),
+      caseId: Joi.string().uuid().optional().allow(''),
+      caseNumber: Joi.string().optional().allow('')
+    }).unknown(true);
 
     const { error } = schema.validate(req.body);
     if (error) {

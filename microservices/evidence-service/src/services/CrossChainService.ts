@@ -193,6 +193,8 @@ export class CrossChainService {
     transactionHash: string;
     blockNumber: number;
     gasUsed: string;
+    network: string;
+    bridge: { targetNetwork: string; transactionHash: string; chainId: number } | null;
   }> {
     try {
       // Get evidence from database
@@ -231,15 +233,30 @@ export class CrossChainService {
         dataHash
       });
       
-      // Submit to blockchain
-      const tx = await (contract as any).submitEvidence(
+      // Helper to submit with one safe retry for common RPC throttling
+      const gasLimit = network === 'amoy' ? 500000 : parseInt(this.config.get<string>('blockchain.gasConfig.gasLimit'));
+      const submitOnce = async () => (contract as any).submitEvidence(
         evidence.ipfsHash,
         dataHash,
         evidenceType,
-        {
-          gasLimit: this.config.get<string>('blockchain.gasConfig.gasLimit')
-        }
+        { gasLimit }
       );
+
+      let tx: any;
+      try {
+        tx = await submitOnce();
+      } catch (err: any) {
+        const msg = (err?.message || '').toLowerCase();
+        const code = (err?.code || '').toString();
+        const retriable = code === '-32000' || msg.includes('in-flight transaction limit');
+        if (retriable) {
+          this.logger.warn('RPC throttled, retrying submit once...', { network, code: err?.code });
+          await new Promise(res => setTimeout(res, 1500));
+          tx = await submitOnce();
+        } else {
+          throw err;
+        }
+      }
       
       // Wait for confirmation
       const receipt = await tx.wait();
@@ -267,13 +284,126 @@ export class CrossChainService {
         blockNumber: receipt.blockNumber
       });
       
+      // Auto-bridge to target network if enabled via env
+      // CROSSCHAIN_AUTO_BRIDGE=true, CROSSCHAIN_TARGET_NETWORK=amoy
+      let bridgeDetails: { targetNetwork: string; transactionHash: string; chainId: number } | null = null;
+      try {
+        const autoBridgeEnabled = (process.env.CROSSCHAIN_AUTO_BRIDGE || 'true') !== 'false';
+        const targetNetwork = process.env.CROSSCHAIN_TARGET_NETWORK || 'amoy';
+        if (autoBridgeEnabled && targetNetwork && targetNetwork !== network) {
+          this.logger.info('Auto-bridging enabled. Starting bridge to target network...', {
+            evidenceId,
+            sourceNetwork: network,
+            targetNetwork
+          });
+          bridgeDetails = await this.autoBridgeToTarget(evidence, targetNetwork);
+        }
+      } catch (bridgeErr) {
+        this.logger.warn('Auto-bridge failed (continuing without blocking submit)', {
+          evidenceId,
+          error: bridgeErr instanceof Error ? bridgeErr.message : String(bridgeErr)
+        });
+      }
+
       return {
         transactionHash: transactionHash || tx.hash,
         blockNumber: receipt.blockNumber,
-        gasUsed: receipt.gasUsed.toString()
+        gasUsed: receipt.gasUsed.toString(),
+        network,
+        bridge: bridgeDetails
+          ? {
+              targetNetwork: bridgeDetails.targetNetwork,
+              transactionHash: bridgeDetails.transactionHash,
+              chainId: bridgeDetails.chainId
+            }
+          : null
       };
     } catch (error) {
       this.logger.error('Failed to submit evidence to blockchain', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mirror the evidence onto a target network (simple bridge)
+   * Submits the same dataHash to the EvidenceRegistry on the target chain,
+   * then stores crossChainData on the evidence record.
+   * This provides verifiable presence for Verify on the target network.
+   */
+  private async autoBridgeToTarget(
+    evidence: any,
+    targetNetwork: string
+  ): Promise<{ targetNetwork: string; transactionHash: string; chainId: number }> {
+    try {
+      const contract = this.contracts.get(targetNetwork);
+      const wallet = this.wallets.get(targetNetwork);
+      const provider = this.providers.get(targetNetwork);
+      if (!contract || !wallet || !provider) {
+        throw new AppError(`Target network not fully configured for bridging: ${targetNetwork}`, 503);
+      }
+
+      const contractWithSigner = contract.connect(wallet);
+      const dataHash = evidence.dataHash && evidence.dataHash.startsWith('0x') ? evidence.dataHash : '0x' + evidence.dataHash;
+      const evidenceType = this.mapEvidenceType(evidence.type);
+
+      this.logger.info('Submitting mirrored evidence on target network for bridging', {
+        evidenceId: evidence.evidenceId,
+        targetNetwork,
+        dataHash
+      });
+
+      // Use lower gas limit for Amoy testnet
+      const gasLimit = targetNetwork === 'amoy' ? 500000 : parseInt(this.config.get<string>('blockchain.gasConfig.gasLimit'));
+      
+      const tx = await (contractWithSigner as any).submitEvidence(
+        evidence.ipfsHash,
+        dataHash,
+        evidenceType,
+        { gasLimit }
+      );
+      const receipt = await tx.wait();
+      const transactionHash = (receipt as any)?.transactionHash ?? (receipt as any)?.hash ?? tx.hash;
+
+      // Persist cross-chain data
+      const networkInfo = await provider.getNetwork();
+      const targetChainId = Number(networkInfo.chainId);
+      evidence.crossChainData = {
+        bridged: true,
+        targetChain: targetChainId,
+        bridgeTransactionHash: transactionHash,
+        bridgeTimestamp: new Date()
+      };
+
+      // Add to chain of custody
+      try {
+        const { CustodyUtils } = await import('../utils/CustodyUtils.js');
+        const prev = evidence.chainOfCustody[evidence.chainOfCustody.length - 1] as any;
+        const ev = CustodyUtils.buildEvent({
+          evidenceId: evidence.evidenceId,
+          dataHash: evidence.dataHash,
+          previousEventHash: prev?.integrity?.eventHash,
+          base: {
+            eventType: 'OTHER',
+            purpose: `Cross-chain bridge to ${targetNetwork}`,
+            notes: `Mirrored on ${targetNetwork} - tx=${transactionHash}`
+          }
+        });
+        evidence.chainOfCustody.push({ ...ev, action: 'CROSS_CHAIN_BRIDGE' } as any);
+      } catch (e) {
+        this.logger.warn('Failed to append custody entry for bridge', e);
+      }
+
+      await evidence.save();
+
+      this.logger.info('Evidence bridged (mirrored) to target network', {
+        evidenceId: evidence.evidenceId,
+        targetNetwork,
+        transactionHash
+      });
+
+      return { targetNetwork, transactionHash, chainId: targetChainId };
+    } catch (error) {
+      this.logger.error('Auto-bridge to target failed', error);
       throw error;
     }
   }
@@ -306,36 +436,159 @@ export class CrossChainService {
         throw new AppError(`Contract not available for network: ${network}`, 503);
       }
       
-      // Check if evidence exists on chain
-      if (!evidence.blockchainData || !evidence.blockchainData.transactionHash) {
-        return {
-          verified: false,
-          onChain: false
-        };
+      // If verifying on a different network than the submission, use usedHashes(dataHash)
+      const provider = this.providers.get(network);
+      if (!provider) {
+        throw new Error('Provider not available');
       }
-      
+
+      const submittedNetwork = evidence.blockchainData?.network;
+      const isCrossChain = submittedNetwork && submittedNetwork !== network;
+      const dataHashHex = evidence.dataHash && evidence.dataHash.startsWith('0x')
+        ? evidence.dataHash
+        : `0x${evidence.dataHash}`;
+
       try {
-        // Get evidence from blockchain
-        // Note: This assumes the contract has a method to get evidence by some identifier
-        // You may need to adjust based on your actual contract implementation
-        const provider = this.providers.get(network);
-        if (!provider) {
-          throw new Error('Provider not available');
-        }
+        // Get target chain ID for network comparison
+        const targetChainId = network === 'amoy' ? 80002 : network === 'sepolia' ? 11155111 : null;
         
-        // Verify transaction exists
+        if (isCrossChain) {
+          // For cross-chain verification, we need to actually check the blockchain
+          // First, verify the evidence exists on the source chain
+          const sourceNetwork = evidence.blockchainData?.network;
+          if (sourceNetwork && sourceNetwork !== network) {
+            // Verify on source chain first
+            const sourceContract = this.contracts.get(sourceNetwork);
+            if (sourceContract) {
+              try {
+                const existsOnSource = await sourceContract.usedHashes(dataHashHex);
+                if (!existsOnSource) {
+                  this.logger.warn('Evidence not found on source chain', {
+                    evidenceId,
+                    sourceNetwork,
+                    dataHash: dataHashHex
+                  });
+                  return { verified: false, onChain: false };
+                }
+                this.logger.info('Evidence verified on source chain', {
+                  evidenceId,
+                  sourceNetwork,
+                  dataHash: dataHashHex
+                });
+              } catch (sourceErr) {
+                this.logger.warn('Failed to verify on source chain', {
+                  evidenceId,
+                  sourceNetwork,
+                  error: sourceErr
+                });
+                // Continue with target chain verification
+              }
+            }
+          }
+
+          // Cross-chain verification: check if the same dataHash exists on target chain
+          let exists = false;
+          try {
+            // usedHashes is a mapping, call it directly with the hash
+            const contract = this.contracts.get(network);
+            if (!contract) {
+              throw new Error(`Contract not loaded for network ${network}`);
+            }
+            exists = await contract.usedHashes(dataHashHex);
+            this.logger.info('Cross-chain verification check', {
+              evidenceId,
+              network,
+              dataHash: dataHashHex,
+              exists
+            });
+          } catch (contractErr: any) {
+            // Contract might be using different ABI or function name, try alternate verification
+            this.logger.warn('usedHashes failed, trying alternate verification', {
+              evidenceId,
+              network,
+              error: contractErr?.message || String(contractErr),
+              contractAddress: this.contracts.get(network)?.target
+            });
+            // Fall through to continue with auto-bridge attempt
+          }
+          if (exists) {
+            return {
+              verified: true,
+              onChain: true,
+              blockchainData: {
+                dataHash: dataHashHex,
+                network
+              }
+            };
+          }
+
+          // Optionally trigger an on-demand bridge to target if not present yet
+          const autoBridgeEnabled = (process.env.CROSSCHAIN_AUTO_BRIDGE || 'true') !== 'false';
+          if (autoBridgeEnabled) {
+            this.logger.info('Cross-chain verify miss: attempting auto-bridge to target', {
+              evidenceId: evidence.evidenceId,
+              targetNetwork: network
+            });
+            try {
+              await this.autoBridgeToTarget(evidence, network);
+              // After successful bridging, verify the evidence actually exists on the target chain
+              // Wait a moment for the transaction to be mined
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              
+              // Re-fetch the evidence to get updated crossChainData
+              const updatedEvidence = await Evidence.findOne({ evidenceId });
+              if (updatedEvidence?.crossChainData?.bridged && updatedEvidence.crossChainData?.targetChain === targetChainId) {
+                // Verify the evidence actually exists on the target chain
+                try {
+                  const existsAfterBridge = await contract.usedHashes(dataHashHex);
+                  if (existsAfterBridge) {
+                    this.logger.info('Evidence verified on target chain after bridging', {
+                      evidenceId,
+                      network,
+                      dataHash: dataHashHex,
+                      bridgeTx: updatedEvidence.crossChainData.bridgeTransactionHash
+                    });
+                    return {
+                      verified: true,
+                      onChain: true,
+                      blockchainData: {
+                        dataHash: dataHashHex,
+                        network,
+                        transactionHash: updatedEvidence.crossChainData.bridgeTransactionHash
+                      }
+                    };
+                  }
+                } catch (verifyErr) {
+                  this.logger.warn('Failed to verify evidence on target chain after bridging', {
+                    evidenceId,
+                    network,
+                    error: verifyErr
+                  });
+                }
+              }
+            } catch (bridgeErr) {
+              this.logger.warn('Auto-bridge during verify failed', bridgeErr);
+            }
+          }
+
+          return { verified: false, onChain: false };
+        }
+
+        // Same-chain verification: prefer tx hash, but fall back to usedHashes
+        if (!evidence.blockchainData || !evidence.blockchainData.transactionHash) {
+          const exists: boolean = await (this.contracts.get(network) as any).usedHashes(dataHashHex);
+          return exists ? { verified: true, onChain: true, blockchainData: { dataHash: dataHashHex, network } } : { verified: false, onChain: false };
+        }
+
+        // Verify transaction exists on this network
         const tx = await provider.getTransaction(evidence.blockchainData.transactionHash);
-        
         if (!tx) {
-          return {
-            verified: false,
-            onChain: false
-          };
+          const exists: boolean = await (this.contracts.get(network) as any).usedHashes(dataHashHex);
+          return exists ? { verified: true, onChain: true, blockchainData: { dataHash: dataHashHex, network } } : { verified: false, onChain: false };
         }
-        
+
         // Get transaction receipt
         const receipt = await provider.getTransactionReceipt(evidence.blockchainData.transactionHash);
-        
         return {
           verified: true,
           onChain: true,
@@ -350,10 +603,7 @@ export class CrossChainService {
         };
       } catch (error) {
         this.logger.error('Error verifying on blockchain', error);
-        return {
-          verified: false,
-          onChain: false
-        };
+        return { verified: false, onChain: false };
       }
     } catch (error) {
       this.logger.error('Failed to verify evidence on blockchain', error);
