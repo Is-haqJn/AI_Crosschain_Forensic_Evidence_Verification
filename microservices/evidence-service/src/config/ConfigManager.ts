@@ -159,6 +159,8 @@ export class ConfigManager {
           'video/mp4',
           'video/avi',
           'application/pdf',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           'audio/mpeg',
           'audio/wav'
         ],

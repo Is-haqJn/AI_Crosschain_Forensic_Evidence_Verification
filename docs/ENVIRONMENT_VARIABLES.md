@@ -42,7 +42,7 @@ These variables contain non-sensitive configuration and can be stored in ConfigM
 - `MODEL_PATH` - Path to AI models
 - `CORS_ORIGIN` - CORS allowed origins
 - `MAX_FILE_SIZE` - Maximum file upload size
-- `ALLOWED_FILE_TYPES` - Allowed file types for upload
+- `ALLOWED_MIME_TYPES` - Allowed file types for upload
 - `JWT_EXPIRY` - JWT token expiry time
 - `JWT_REFRESH_EXPIRY` - JWT refresh token expiry time
 
@@ -161,7 +161,7 @@ CORS_ORIGIN=http://localhost:3000,http://localhost:3001
 
 # File Upload
 MAX_FILE_SIZE=104857600
-ALLOWED_FILE_TYPES=image/jpeg,image/png,video/mp4,application/pdf
+ALLOWED_MIME_TYPES=image/jpeg,image/png,video/mp4,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document
 
 # Monitoring
 PROMETHEUS_PORT=9090

@@ -168,6 +168,28 @@ export class ValidationMiddleware {
   }
 
   /**
+   * Validate case creation payload
+   */
+  public validateCaseCreate(req: Request, _res: Response, next: NextFunction): void {
+    const schema = Joi.object({
+      title: Joi.string().trim().min(1).max(200).required(),
+      description: Joi.string().allow('', null).max(2000).optional(),
+      tags: Joi.alternatives().try(
+        Joi.array().items(Joi.string().trim().max(50)),
+        Joi.string().trim().max(200)
+      ).optional()
+    });
+
+    const { error, value } = schema.validate(req.body ?? {}, { abortEarly: true, stripUnknown: true });
+    if (error) {
+      throw new AppError(error.details[0].message, 400);
+    }
+
+    req.body = value;
+    next();
+  }
+
+  /**
    * Validate custody transfer
    */
   public validateCustodyTransfer(req: Request, _res: Response, next: NextFunction): void {
@@ -248,3 +270,4 @@ export class ValidationMiddleware {
 }
 
 export default ValidationMiddleware;
+

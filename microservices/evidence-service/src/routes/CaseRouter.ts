@@ -22,9 +22,7 @@ export class CaseRouter {
     this.router.post(
       '/',
       this.auth.authenticate.bind(this.auth),
-      this.validate.validate(
-        (ValidationMiddleware as any)['__CASE_CREATE_SCHEMA__']
-      ),
+      this.validate.validateCaseCreate.bind(this.validate),
       this.controller.create.bind(this.controller)
     );
 
@@ -56,3 +54,4 @@ export class CaseRouter {
 }
 
 export default CaseRouter;
+

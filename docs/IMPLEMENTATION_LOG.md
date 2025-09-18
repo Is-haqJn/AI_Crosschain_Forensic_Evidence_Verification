@@ -1,3 +1,17 @@
+## 2025-09-18 - Allow DOCX uploads and add case validation
+- What was happening:
+  - DOCX uploads failed with 400 because the MIME type pplication/vnd.openxmlformats-officedocument.wordprocessingml.document was not in the allowed list even though .docx extension passed.
+  - Case creation validation used a placeholder schema reference yielding Cannot read properties of undefined (reading 'validate').
+- What changed:
+  - Added alidateCaseCreate in ValidationMiddleware and wired it in CaseRouter so Joi validation runs without accessing the old placeholder schema.
+  - Extended the default upload MIME allowlist in ConfigManager to include pplication/msword and DOCX MIME.
+  - Updated .env and docs to include the new MIME types.
+- Why it works:
+  - Backend now recognizes Microsoft Word documents as valid uploads while keeping existing checks; schema validation now uses an instantiated middleware method.
+- Testing:
+  - Manually uploaded a DOCX via UI (success).
+  - Confirmed case creation still succeeds after validation change.
+
 ## 2025-09-15 – Fix case creation 400 and favicon 500
 - Auth fixes (same date):
   - Backend `AuthMiddleware.authenticate` now validates required JWT claims (`id`, `email`, `role`, `organization`) and rejects tokens missing any of them with 401, preventing confusing downstream 400s.
