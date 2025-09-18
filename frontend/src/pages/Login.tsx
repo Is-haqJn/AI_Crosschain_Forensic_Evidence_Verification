@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { Shield, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { authService } from '../services/authService';
 import { LoginForm } from '../types';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 
@@ -160,9 +159,9 @@ export const Login: React.FC = () => {
                 </div>
 
                 <div className="text-sm">
-                  <a href="#" className="font-semibold text-blue-600 hover:text-blue-500 transition-colors">
+                  <button type="button" className="font-semibold text-blue-600 hover:text-blue-500 transition-colors">
                     Forgot password?
-                  </a>
+                  </button>
                 </div>
               </div>
 
@@ -186,9 +185,9 @@ export const Login: React.FC = () => {
               <div className="text-center">
                 <p className="text-sm text-gray-600">
                   Don't have an account?{' '}
-                  <a href="#" className="font-semibold text-blue-600 hover:text-blue-500 transition-colors">
+                  <button type="button" className="font-semibold text-blue-600 hover:text-blue-500 transition-colors">
                     Contact your administrator
-                  </a>
+                  </button>
                 </p>
               </div>
             </form>
@@ -198,3 +197,5 @@ export const Login: React.FC = () => {
     </div>
   );
 };
+
+

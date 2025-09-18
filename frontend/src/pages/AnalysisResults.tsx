@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 import { Link } from 'react-router-dom';
 import { evidenceService } from '../services/evidenceService';
+import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/apiService';
 import { AIAnalysisResult, Evidence, EvidenceStatus, EvidenceType } from '../types';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -9,6 +10,7 @@ import { toast } from 'react-toastify';
 
 export const AnalysisResults: React.FC = () => {
   const queryClient = useQueryClient();
+  const { token } = useAuth();
 
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
@@ -23,7 +25,18 @@ export const AnalysisResults: React.FC = () => {
       type: typeFilter || undefined,
       search: search || undefined,
     }),
-    { keepPreviousData: true, refetchOnWindowFocus: false }
+    {
+      keepPreviousData: true,
+      refetchOnWindowFocus: false,
+      enabled: !!token,
+      retry: (failureCount, error) => {
+        const status = (error as any)?.response?.status;
+        if (status === 401 || status === 403) {
+          return false;
+        }
+        return failureCount < 2;
+      }
+    }
   );
 
   const items: Evidence[] = useMemo(() => {
@@ -44,9 +57,10 @@ export const AnalysisResults: React.FC = () => {
   const stopPolling = (id: string) => {
     const timerId = pollersRef.current[id];
     if (timerId) {
-      clearInterval(timerId);
+      clearTimeout(timerId);
       delete pollersRef.current[id];
     }
+    delete pollStateRef.current[id];
     setPollingMap((prev) => {
       const copy = { ...prev };
       delete copy[id];
@@ -134,8 +148,9 @@ export const AnalysisResults: React.FC = () => {
   // Cleanup all timers on unmount
   useEffect(() => {
     return () => {
-      Object.values(pollersRef.current).forEach((t) => clearInterval(t));
+      Object.values(pollersRef.current).forEach((t) => clearTimeout(t));
       pollersRef.current = {};
+      pollStateRef.current = {};
     };
   }, []);
 
@@ -318,3 +333,4 @@ export const AnalysisResults: React.FC = () => {
     </div>
   );
 };
+

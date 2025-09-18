@@ -37,6 +37,19 @@ class AnalysisService:
             "total_completed": 0,
             "total_failed": 0
         }
+        self.db_manager = db_service
+        self.redis_cache = redis_cache
+        self.mq_manager = message_queue
+
+    def _db_ready(self) -> bool:
+        return getattr(self.db_manager, "_connected", False)
+
+    def _cache_ready(self) -> bool:
+        return getattr(self.redis_cache, "_connected", False)
+
+    def _mq_ready(self) -> bool:
+        return getattr(self.mq_manager, "_connected", False)
+
     
     async def submit_analysis(self, request: AnalysisRequest, file_path: str) -> AnalysisResponse:
         """
@@ -106,7 +119,7 @@ class AnalysisService:
                 return cached_status
             
             # Fall back to database
-            if self.db_manager:
+            if self._db_ready():
                 return await self._get_status_from_db(analysis_id)
             
             # Check active analyses
@@ -145,13 +158,13 @@ class AnalysisService:
                 return None
             
             # Try cache first
-            if self.redis_cache:
+            if self._cache_ready():
                 cached_results = await self.redis_cache.get(f"results:{analysis_id}")
                 if cached_results:
                     return json.loads(cached_results)
             
             # Fall back to database
-            if self.db_manager:
+            if self._db_ready():
                 return await self._get_results_from_db(analysis_id)
             
             return None
@@ -173,7 +186,7 @@ class AnalysisService:
             List of analyses for the evidence
         """
         try:
-            if self.db_manager:
+            if self._db_ready():
                 return await self._get_evidence_analyses_from_db(evidence_id, skip, limit)
             
             # Fallback to in-memory search
@@ -244,7 +257,7 @@ class AnalysisService:
                 await self._store_analysis_results(analysis_id, results)
             
             # Update database
-            if self.db_manager:
+            if self._db_ready():
                 await self._update_status_in_db(analysis_id, status, progress, error_message)
             
             logger.info(f"Analysis {analysis_id} status updated: {status}")
@@ -351,7 +364,7 @@ class AnalysisService:
         """
         try:
             # Send via message queue if available
-            if self.mq_manager:
+            if self._mq_ready():
                 await self._send_results_via_mq(analysis_id, evidence_id, results)
             
             # Also send via HTTP API as backup
@@ -366,13 +379,13 @@ class AnalysisService:
     
     async def _store_analysis_request(self, request: AnalysisRequest):
         """Store analysis request in database"""
-        if self.db_manager:
+        if self._db_ready():
             # Would implement database storage
             pass
     
     async def _cache_analysis_status(self, analysis_id: str, status: str, progress: int):
         """Cache analysis status in Redis"""
-        if self.redis_cache:
+        if self._cache_ready():
             status_data = {
                 "status": status,
                 "progress": progress,
@@ -386,7 +399,7 @@ class AnalysisService:
     
     async def _get_cached_status(self, analysis_id: str) -> Optional[AnalysisStatus]:
         """Get cached analysis status"""
-        if self.redis_cache:
+        if self._cache_ready():
             cached_data = await self.redis_cache.get(f"status:{analysis_id}")
             if cached_data:
                 data = json.loads(cached_data)
@@ -396,7 +409,7 @@ class AnalysisService:
     
     async def _queue_analysis_request(self, request: AnalysisRequest, file_path: str):
         """Queue analysis request for processing"""
-        if self.mq_manager:
+        if self._mq_ready():
             message = {
                 "analysis_id": request.analysis_id,
                 "evidence_id": request.evidence_id,
@@ -437,7 +450,7 @@ class AnalysisService:
     async def _store_analysis_results(self, analysis_id: str, results: Dict[str, Any]):
         """Store analysis results"""
         # Cache results
-        if self.redis_cache:
+        if self._cache_ready():
             await self.redis_cache.set(
                 f"results:{analysis_id}",
                 json.dumps(results, default=str),
@@ -445,13 +458,13 @@ class AnalysisService:
             )
         
         # Store in database
-        if self.db_manager:
+        if self._db_ready():
             # Would implement database storage
             pass
     
     async def _send_results_via_mq(self, analysis_id: str, evidence_id: str, results: Dict[str, Any]):
         """Send results via message queue"""
-        if self.mq_manager:
+        if self._mq_ready():
             message = {
                 "analysis_id": analysis_id,
                 "evidence_id": evidence_id,

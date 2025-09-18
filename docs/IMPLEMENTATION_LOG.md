@@ -505,3 +505,17 @@ The project provides a solid foundation for future research and development in t
   - Script confirmed no actual duplicate indexes in MongoDB
   - `mongoose.syncIndexes()` successfully synchronizes indexes on startup
   - **✅ Warning resolved** - no more duplicate index warnings in logs
+
+## 2025-09-18 - AI Analysis Queue Fix
+
+- What was wrong:
+  - Evidence service reported "Analysis started" but no analysis actually ran; documents stayed in queued state.
+  - AI analysis microservice crashed on every submission because dependencies (`db_manager`, `redis_cache`, `mq_manager`) were never set, causing AttributeErrors and preventing background processing.
+
+- What changed:
+  - `microservices/ai-analysis-service/src/services/analysis_service.py`
+    - Wire the shared database/redis/message-queue services into `AnalysisService` during init and add readiness helpers so the service skips optional integrations when downstream systems are offline instead of crashing.
+    - Gate all DB/Redis/RabbitMQ interactions behind connection checks to avoid AttributeErrors before the connectors are initialized.
+
+- Current status:
+  - AI submissions now reach the background processor and no longer loop forever in the queued state (verification pending with full system test).

@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
+import FormData from 'form-data';
 import jwt from 'jsonwebtoken';
 import { Logger } from '../utils/Logger.js';
 import { AppError } from '../middleware/ErrorHandler.js';
@@ -211,7 +212,6 @@ export class AIAnalysisIntegrationService {
     metadata?: any
   ): Promise<{ analysisId: string; status: string; estimatedCompletion?: string }> {
     // Create FormData for file upload
-    const FormData = require('form-data');
     const formData = new FormData();
     
     formData.append('evidence_id', evidenceId);
@@ -496,3 +496,4 @@ export class AIAnalysisIntegrationService {
 }
 
 export default AIAnalysisIntegrationService;
+

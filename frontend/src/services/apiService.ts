@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
+import axios, { AxiosInstance } from 'axios';
 import { authService } from './authService';
 
 // API service for communicating with backend services
@@ -171,3 +171,4 @@ class ApiService {
 }
 
 export const apiService = new ApiService();
+

@@ -111,7 +111,7 @@ export const Dashboard: React.FC = () => {
     }
   );
 
-  const { data: crosschain, isLoading: ccLoading } = useQuery(
+  const { data: crosschain } = useQuery(
     'crosschain-health',
     () => evSvc.getCrossChainHealth(),
     {
@@ -289,3 +289,5 @@ export const Dashboard: React.FC = () => {
     </div>
   );
 };
+
+
