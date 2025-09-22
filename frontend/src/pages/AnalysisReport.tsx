@@ -407,6 +407,27 @@ export const AnalysisReport: React.FC = () => {
           </div>
         </div>
         
+      {/* Detected Text (OCR) */}
+      {metadata?.extracted?.text && (
+        <div className="bg-white shadow rounded-lg p-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Detected Text (OCR)</h3>
+          <div className="bg-gray-50 p-4 rounded-md">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-medium text-gray-500">Extracted Text</p>
+              <button
+                className="btn btn-sm"
+                onClick={() => {
+                  try { navigator?.clipboard?.writeText?.(metadata.extracted.text as string); } catch {}
+                }}
+              >
+                Copy
+              </button>
+            </div>
+            <pre className="text-sm whitespace-pre-wrap break-words">{metadata.extracted.text}</pre>
+          </div>
+        </div>
+      )}
+
         {/* Content Analysis Section */}
         <div className="bg-white shadow rounded-lg p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Content Analysis</h3>

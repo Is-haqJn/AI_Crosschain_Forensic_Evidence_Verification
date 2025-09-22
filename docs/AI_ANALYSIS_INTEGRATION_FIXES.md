@@ -44,6 +44,7 @@ This document outlines the fixes applied to resolve the AI analysis integration 
 - Result serialization improvements:
   - Deep-serialize Pydantic/Enum/Datetime to plain JSON.
   - Add UI-friendly fields `confidence_percent` (0–100) and `processing_time_ms`.
+  - OCR text added under `results.technical_metadata.extracted_text` (see OCR docs).
 
 Commands used:
 
@@ -259,6 +260,9 @@ evidence-service:
    - Verify no 400 errors in logs
 
 4. **Monitor Service Logs**:
+5. **OCR**:
+   - See `docs/OCR_IMPLEMENTATION.md` for flags, deps, and expected output.
+
    ```bash
    docker-compose -f docker-compose.dev.yml logs ai-analysis-service --tail=20
    docker-compose -f docker-compose.dev.yml logs evidence-service --tail=20

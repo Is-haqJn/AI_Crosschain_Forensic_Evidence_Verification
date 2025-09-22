@@ -273,20 +273,17 @@ GET /api/v1/evidence/:id/ai-analysis/results
 Authorization: Bearer <token>
 ```
 
-**Response:**
+**Response (Evidence Service wrapper):**
 ```json
 {
   "success": true,
   "data": {
     "analysisId": "analysis_uuid",
     "status": "completed",
-    "results": {
-      "confidence": 95.5,
-      "anomaliesDetected": false,
-      "findings": [...],
-      "metadata": {...}
-    },
-    "processingTime": 45.2,
+    "results": { /* raw AI results mapped as-is or normalized */ },
+    "confidence": 95.5,
+    "anomaliesDetected": false,
+    "processingTime": 45200,
     "completedAt": "2025-09-11T01:06:02.570Z"
   }
 }
@@ -666,30 +663,26 @@ GET /api/v1/results/:analysis_id
 Authorization: Bearer <token>
 ```
 
-**Response:**
+**Response (AI service):**
 ```json
 {
   "analysis_id": "analysis_uuid",
   "evidence_id": "evidence_uuid",
   "status": "completed",
   "results": {
-    "confidence": 95.5,
-    "anomaliesDetected": false,
-    "findings": [
-      {
-        "type": "manipulation_detection",
-        "confidence": 95.5,
-        "description": "No signs of digital manipulation detected",
-        "details": {...}
-      }
-    ],
-    "metadata": {
-      "processing_time": 45.2,
-      "model_version": "v1.2.3",
-      "analysis_type": "image"
-    }
+    "confidence_score": 0.955,
+    "confidence_percent": 96,
+    "manipulation_detection": { /* ... */ },
+    "technical_metadata": {
+      "width": 1280,
+      "height": 720,
+      "extracted_text": "Example text detected..."
+    },
+    "detected_objects": [],
+    "detected_faces": []
   },
   "processing_time": 45.2,
+  "processing_time_ms": 45200,
   "completed_at": "2025-09-11T01:06:47.770Z"
 }
 ```

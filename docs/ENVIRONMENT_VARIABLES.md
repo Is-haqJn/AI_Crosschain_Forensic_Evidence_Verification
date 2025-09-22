@@ -140,6 +140,11 @@ JWT_REFRESH_EXPIRY=7d
 # AI Service
 AI_SERVICE_URL=http://localhost:8001
 MODEL_PATH=/models
+# OCR
+IMAGE_ENABLE_OCR=true
+OCR_LANGUAGE=eng
+# Optional object detection (requires real model files under MODEL_PATH)
+IMAGE_ENABLE_OBJECT_DETECTION=false
 OPENAI_API_KEY=your_openai_api_key_here
 
 # Frontend Configuration

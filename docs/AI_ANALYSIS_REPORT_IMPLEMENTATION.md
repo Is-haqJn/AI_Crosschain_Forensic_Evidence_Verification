@@ -48,6 +48,21 @@ This document describes the implementation of the detailed Analysis Report page 
 4. Component renders appropriate sections based on evidence type
 5. User can toggle between summary and raw JSON views
 
+### Data Mapping (Current)
+
+- Confidence: `results.confidence_percent | results.confidence_score` → percent (0–100)
+- Processing Time: `results.processing_time_ms | results.processing_time` (UI converts seconds to ms when needed)
+- Image:
+  - Manipulation: `results.manipulation_detection`
+  - Metadata: `results.technical_metadata` shown under "Image Metadata"
+    - Includes `extracted_text` (OCR) which is mapped to `metadata.extracted.text` and displayed in a "Detected Text (OCR)" card
+  - Content: `results.detected_objects`, `results.detected_faces`
+  - Anomalies: `results.manipulation_detection.affected_regions` (if present)
+
+Feature flags (see ENVIRONMENT_VARIABLES.md and OCR_IMPLEMENTATION.md):
+- `IMAGE_ENABLE_OBJECT_DETECTION` (default: false) – only runs when real model weights are present
+- `IMAGE_ENABLE_OCR` (default: true) – enables Tesseract OCR; `OCR_LANGUAGE` controls language(s)
+
 ## Technical Considerations
 
 1. **Performance**

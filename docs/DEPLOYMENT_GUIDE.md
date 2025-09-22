@@ -117,6 +117,8 @@ docker tag ai-analysis-service:latest your-registry/ai-analysis-service:latest
 docker push your-registry/ai-analysis-service:latest
 ```
 
+Note: The Dockerfile installs `tesseract-ocr` and `tesseract-ocr-eng` for OCR. To enable OCR in runtime, set `IMAGE_ENABLE_OCR=true` (default) and `OCR_LANGUAGE` as needed. Object detection is disabled by default; enable with `IMAGE_ENABLE_OBJECT_DETECTION=true` only when real model weights are mounted under `MODEL_PATH`.
+
 ### Running with Docker Compose
 
 #### Complete Stack

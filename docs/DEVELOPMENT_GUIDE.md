@@ -36,6 +36,9 @@ npm install
 ```bash
 cd microservices/ai-analysis-service
 pip install -r requirements.txt
+# For OCR locally, install Tesseract on host (optional):
+#   - macOS: brew install tesseract
+#   - Ubuntu/Debian: sudo apt-get install tesseract-ocr tesseract-ocr-eng
 ```
 
 ### Step 3: Environment Configuration
@@ -68,6 +71,11 @@ REDIS_URL=redis://:redis_pass@localhost:6379
 RABBITMQ_URL=amqp://rabbitmq_user:rabbitmq_pass@localhost:5672
 JWT_SECRET=your-development-jwt-secret
 TF_ENABLE_ONEDNN_OPTS=0
+# OCR
+IMAGE_ENABLE_OCR=true
+OCR_LANGUAGE=eng
+# Optional object detection (requires model weights under MODEL_PATH)
+IMAGE_ENABLE_OBJECT_DETECTION=false
 ```
 
 ### Step 4: Start Infrastructure Services
