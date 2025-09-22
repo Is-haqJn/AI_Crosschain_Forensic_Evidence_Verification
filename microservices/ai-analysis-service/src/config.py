@@ -85,6 +85,9 @@ class Settings(BaseSettings):
     IMAGE_MAX_SIZE: int = 50 * 1024 * 1024  # 50MB
     IMAGE_ALLOWED_FORMATS: List[str] = ["jpg", "jpeg", "png", "gif", "bmp", "tiff"]
     IMAGE_ANALYSIS_TIMEOUT: int = 60
+    IMAGE_ENABLE_OBJECT_DETECTION: bool = False
+    IMAGE_ENABLE_OCR: bool = True
+    OCR_LANGUAGE: str = os.getenv("OCR_LANGUAGE", "eng")
     
     # Video Analysis Settings
     VIDEO_MAX_SIZE: int = 500 * 1024 * 1024  # 500MB

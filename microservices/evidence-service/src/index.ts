@@ -8,32 +8,19 @@ export {};
 
 console.log('🚀 Starting Evidence Service index.ts...'); // touch for reload
 
-// Import app.js and test constructor vs start steps from the full implementation
+// Prefer simple static import to avoid dynamic ESM resolver quirks
 try {
-  console.log('📦 Importing ./app.js module (no execution yet)...');
-  const appModule = await import('./app.js');
-  console.log('✅ app.js imported. Export keys:', Object.keys(appModule));
-
-  const ForensicEvidenceApp = (appModule as any).ForensicEvidenceApp;
-  if (!ForensicEvidenceApp) {
-    console.log('⚠️ Named export ForensicEvidenceApp not found. Available exports:', Object.keys(appModule));
-  } else {
-    console.log('🏗️ Creating app instance via getInstance (constructor phase)...');
-    const appInstance = ForensicEvidenceApp.getInstance();
-    console.log('✅ App instance created. Proceeding to start...');
-
-    console.log('▶️ Starting application (middleware, routes, server, background connections)...');
-    await appInstance.start();
-    console.log('✅ Application started successfully');
+  const app = (await import('./app.js')).default as any;
+  if (!app || typeof app.start !== 'function') {
+    throw new Error('app.js default export is not an app instance with start()');
   }
-
+  console.log('▶️ Starting application (middleware, routes, server, background connections)...');
+  await app.start();
+  console.log('✅ Application started successfully');
 } catch (error: unknown) {
-  console.error('❌ Failed to start application:');
-  console.error('Error type:', typeof error);
-  console.error('Error constructor:', (error as any)?.constructor?.name);
-  console.error('Error message:', (error as Error)?.message || 'No message');
-  console.error('Error stack:', (error as Error)?.stack || 'No stack trace');
-  console.error('Full error object:', JSON.stringify(error, null, 2));
+  const { inspect } = await import('node:util');
+  console.error('❌ Failed to start application (static import path):');
+  console.error(inspect(error, { depth: 8, colors: false }));
   process.exit(1);
 }
 

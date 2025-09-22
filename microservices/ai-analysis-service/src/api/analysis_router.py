@@ -80,13 +80,23 @@ async def submit_analysis(
                 detail=f"Invalid file format for {analysis_type} analysis"
             )
         
+        # Compute file size robustly (UploadFile.size may be None)
+        computed_file_size = getattr(file, "size", None)
+        if not computed_file_size:
+            try:
+                content = await file.read()
+                computed_file_size = len(content)
+                await file.seek(0)
+            except Exception:
+                computed_file_size = None
+
         # Create analysis request
         analysis_request = AnalysisRequest(
             analysis_id=analysis_id,
             evidence_id=evidence_id,
             analysis_type=analysis_type,
             file_name=file.filename,
-            file_size=file.size,
+            file_size=computed_file_size,
             priority=priority,
             metadata=metadata,
             user_id=user_token.get("userId"),
@@ -97,9 +107,7 @@ async def submit_analysis(
         file_path = await file_handler.save_temp_file(file, analysis_id)
         
         # Submit to analysis service
-        analysis_response = await analysis_service.submit_analysis(
-            analysis_request, file_path
-        )
+        analysis_response = await analysis_service.submit_analysis(analysis_request, file_path)
         
         # Start background analysis
         background_tasks.add_task(

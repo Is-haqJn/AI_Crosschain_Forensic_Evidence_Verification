@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { CaseController } from '../controllers/CaseController.js';
 import { AuthMiddleware } from '../middleware/AuthMiddleware.js';
-import ValidationMiddleware from '../middleware/ValidationMiddleware.js';
+import { ValidationMiddleware } from '../middleware/ValidationMiddleware.js';
 
 export class CaseRouter {
   private router: Router;

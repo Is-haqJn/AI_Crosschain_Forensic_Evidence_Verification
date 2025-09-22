@@ -33,6 +33,7 @@ from ..schemas.analysis_schemas import (
 )
 from ..models import get_model_manager
 from ..config import get_settings
+import pytesseract  # type: ignore
 
 settings = get_settings()
 
@@ -45,6 +46,8 @@ class ImageProcessor:
         self.supported_formats = settings.IMAGE_ALLOWED_FORMATS
         self.max_size = settings.IMAGE_MAX_SIZE
         self.confidence_threshold = settings.IMAGE_CONFIDENCE_THRESHOLD
+        # Optional toggle; default to False to avoid placeholder data
+        self.enable_object_detection = bool(getattr(settings, "IMAGE_ENABLE_OBJECT_DETECTION", False))
     
     async def analyze(self, file_path: str, request: AnalysisRequest) -> ImageAnalysisResult:
         """
@@ -84,6 +87,13 @@ class ImageProcessor:
             detected_faces = results[4]
             quality_score = results[5]
             technical_metadata = results[6]
+            # Optionally run OCR for detected text
+            extracted_text: str = ""
+            if self.enable_object_detection or settings.IMAGE_ENABLE_OCR:
+                try:
+                    extracted_text = await self._extract_text_ocr(file_path)
+                except Exception:
+                    extracted_text = ""
             
             processing_time = time.time() - start_time
             
@@ -104,7 +114,7 @@ class ImageProcessor:
                 detected_objects=detected_objects,
                 detected_faces=detected_faces,
                 image_quality_score=quality_score,
-                technical_metadata=technical_metadata,
+                technical_metadata={**technical_metadata, **({"extracted_text": extracted_text} if extracted_text else {})},
                 metadata={
                     "file_path": file_path,
                     "analysis_timestamp": datetime.utcnow().isoformat(),
@@ -140,38 +150,70 @@ class ImageProcessor:
     async def _detect_manipulation(self, image: np.ndarray, file_path: str) -> ImageManipulationResult:
         """Detect image manipulation and tampering"""
         try:
-            # Get manipulation detection model
-            model = self.model_manager.get_model("image_manipulation_detector")
-            
-            if model is None:
-                logger.warning("Manipulation detection model not loaded, using fallback")
-                return await self._fallback_manipulation_detection(image)
-            
-            # Preprocessing for model
-            processed_image = await self._preprocess_for_manipulation_detection(image)
-            
-            # Run inference (simulate for now)
-            confidence = 0.75  # Placeholder confidence
+            # Attempt model-driven analysis first (if a real model is integrated)
+            model = await self.model_manager.get_model("image_manipulation_detector")
+            if model and callable(model.get("analyze")):
+                out = model["analyze"](file_path)
+                conf = float(out.get("confidence_score", 0.0))
+                if conf > 1.0:
+                    conf = max(0.0, min(1.0, conf / 100.0))
+                return ImageManipulationResult(
+                    is_manipulated=bool(out.get("is_authentic") is False),
+                    manipulation_type=str(out.get("manipulation_type") or "unknown"),
+                    confidence=conf,
+                    affected_regions=out.get("affected_regions", [])
+                )
+
+            # Model unavailable → perform Error Level Analysis (ELA) + gradient energy heuristics
+            from PIL import Image as _PIL_Image
+            pil_img = _PIL_Image.open(file_path).convert('RGB')
+            import io
+            buf = io.BytesIO()
+            pil_img.save(buf, 'JPEG', quality=85)
+            buf.seek(0)
+            recompressed = _PIL_Image.open(buf).convert('RGB')
+
+            # ELA difference
+            ela = np.abs(np.asarray(pil_img, dtype=np.int16) - np.asarray(recompressed, dtype=np.int16)).astype(np.float32)
+            ela_norm = ela / 255.0
+            ela_score = float(np.clip(np.mean(ela_norm) * 4.0, 0.0, 1.0))
+
+            # Gradient energy (to capture cloning/smoothing anomalies)
+            if cv2 is not None:  # type: ignore
+                gray = cv2.cvtColor(image if image.ndim == 3 else np.stack([image]*3, axis=-1), cv2.COLOR_BGR2GRAY)  # type: ignore
+                sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)  # type: ignore
+                sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)  # type: ignore
+                grad_mag = np.sqrt(sobelx**2 + sobely**2)
+                grad_score = float(np.clip(np.mean(grad_mag) / 50.0, 0.0, 1.0))
+            else:
+                gx = np.gradient(np.mean(image, axis=2) if image.ndim == 3 else image, axis=0)
+                gy = np.gradient(np.mean(image, axis=2) if image.ndim == 3 else image, axis=1)
+                grad_mag = np.sqrt(gx*gx + gy*gy)
+                grad_score = float(np.clip(np.mean(grad_mag) / 20.0, 0.0, 1.0))
+
+            # Combined confidence
+            confidence = float(np.clip(0.6*ela_score + 0.4*grad_score, 0.0, 1.0))
             is_manipulated = confidence > self.confidence_threshold
-            
-            # Detect affected regions (placeholder)
-            affected_regions = []
-            if is_manipulated:
-                affected_regions = [
-                    {
-                        "x": 100, "y": 100, "width": 200, "height": 150,
-                        "confidence": confidence,
-                        "manipulation_type": "splicing"
-                    }
-                ]
-            
+
+            # Simple region proposal from high-ELA areas
+            affected_regions: List[Dict[str, Any]] = []
+            try:
+                mask = (ela_norm.mean(axis=2) > (ela_norm.mean() + 2*ela_norm.std())).astype(np.uint8)
+                if cv2 is not None:
+                    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)  # type: ignore
+                    for c in contours[:10]:
+                        x, y, w, h = cv2.boundingRect(c)  # type: ignore
+                        if w*h > 50:
+                            affected_regions.append({"x": int(x), "y": int(y), "width": int(w), "height": int(h), "confidence": confidence, "manipulation_type": "suspected"})
+            except Exception:
+                pass
+
             return ImageManipulationResult(
                 is_manipulated=is_manipulated,
-                manipulation_type="splicing" if is_manipulated else None,
+                manipulation_type="suspected" if is_manipulated else None,
                 confidence=confidence,
                 affected_regions=affected_regions
             )
-            
         except Exception as e:
             logger.error(f"Manipulation detection failed: {e}")
             return await self._fallback_manipulation_detection(image)
@@ -320,25 +362,53 @@ class ImageProcessor:
         return None
     
     async def _detect_objects(self, image: np.ndarray) -> List[Dict[str, Any]]:
-        """Detect objects in the image"""
+        """Detect objects in the image.
+
+        Real detection is attempted only when explicitly enabled and model files
+        are available under settings.MODEL_PATH. Otherwise, return [].
+        """
         try:
-            # Placeholder object detection
-            # In production, use YOLO, RCNN, or similar models
-            objects = [
-                {
-                    "class": "person",
-                    "confidence": 0.85,
-                    "bbox": {"x": 100, "y": 50, "width": 200, "height": 300}
-                },
-                {
-                    "class": "vehicle",
-                    "confidence": 0.72,
-                    "bbox": {"x": 300, "y": 200, "width": 150, "height": 100}
-                }
-            ]
-            
-            return objects
-            
+            if not self.enable_object_detection or cv2 is None:
+                return []
+
+            from pathlib import Path as _Path
+            model_dir = _Path(settings.MODEL_PATH)
+
+            # Try MobileNet-SSD (Caffe) if present
+            proto = model_dir / "MobileNetSSD_deploy.prototxt.txt"
+            weights = model_dir / "MobileNetSSD_deploy.caffemodel"
+            if proto.exists() and weights.exists():
+                net = cv2.dnn.readNetFromCaffe(str(proto), str(weights))  # type: ignore
+                blob = cv2.dnn.blobFromImage(cv2.resize(image, (300, 300)), 0.007843, (300, 300), 127.5)  # type: ignore
+                net.setInput(blob)  # type: ignore
+                detections = net.forward()  # type: ignore
+
+                classes = [
+                    "background", "aeroplane", "bicycle", "bird", "boat",
+                    "bottle", "bus", "car", "cat", "chair", "cow", "diningtable",
+                    "dog", "horse", "motorbike", "person", "pottedplant", "sheep",
+                    "sofa", "train", "tvmonitor"
+                ]
+
+                results: List[Dict[str, Any]] = []
+                (h, w) = image.shape[:2]
+                for i in range(detections.shape[2]):  # type: ignore
+                    confidence = float(detections[0, 0, i, 2])  # type: ignore
+                    if confidence < 0.5:
+                        continue
+                    idx = int(detections[0, 0, i, 1])  # type: ignore
+                    box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])  # type: ignore
+                    (startX, startY, endX, endY) = box.astype("int")
+                    results.append({
+                        "class": classes[idx] if 0 <= idx < len(classes) else str(idx),
+                        "confidence": float(confidence),
+                        "bbox": {"x": int(startX), "y": int(startY), "width": int(max(0, endX - startX)), "height": int(max(0, endY - startY))}
+                    })
+                return results
+
+            # If no supported model present, do not fabricate detections
+            return []
+
         except Exception as e:
             logger.error(f"Object detection failed: {e}")
             return []
@@ -417,6 +487,28 @@ class ImageProcessor:
         except Exception as e:
             logger.error(f"Technical metadata extraction failed: {e}")
             return {}
+
+    async def _extract_text_ocr(self, file_path: str) -> str:
+        """Extract visible text using Tesseract OCR (simple pipeline)."""
+        if not settings.IMAGE_ENABLE_OCR:
+            return ""
+        try:
+            # Use PIL to open and convert to grayscale to stabilize OCR
+            pil = Image.open(file_path)
+            if pil.mode != 'RGB':
+                pil = pil.convert('RGB')
+            gray = pil.convert('L')
+            # Optional small resize to help OCR on tiny images
+            w, h = gray.size
+            if w < 200 or h < 200:
+                scale = max(1, int(200 / min(w, h)))
+                gray = gray.resize((w * scale, h * scale))
+            text = pytesseract.image_to_string(gray, lang=settings.OCR_LANGUAGE)
+            text = (text or '').strip()
+            return text
+        except Exception as e:
+            logger.debug(f"OCR extraction failed: {e}")
+            return ""
     
     async def _preprocess_for_manipulation_detection(self, image: np.ndarray) -> np.ndarray:
         """Preprocess image for manipulation detection model"""

@@ -18,6 +18,8 @@ RUN set -eux; \
       libglib2.0-0 \
       ffmpeg \
       libsndfile1 \
+      tesseract-ocr \
+      tesseract-ocr-eng \
       wget \
       curl; \
     rm -rf /var/lib/apt/lists/*

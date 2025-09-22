@@ -52,13 +52,13 @@ export class ValidationMiddleware {
     const schema = Joi.object({
       page: Joi.number().integer().min(1).optional(),
       limit: Joi.number().integer().min(1).max(100).optional(),
-      status: Joi.string().valid('UPLOADED', 'PROCESSING', 'ANALYZED', 'VERIFIED', 'REJECTED', 'ARCHIVED').optional(),
       type: Joi.string().valid('IMAGE', 'VIDEO', 'DOCUMENT', 'AUDIO', 'OTHER').optional(),
-      sortBy: Joi.string().valid('createdAt', 'updatedAt', 'status', 'type').optional(),
-      sortOrder: Joi.string().valid('asc', 'desc').optional(),
+      status: Joi.string().valid('UPLOADED', 'PROCESSING', 'ANALYZED', 'VERIFIED', 'REJECTED', 'ARCHIVED').optional(),
+      search: Joi.string().max(100).optional(),
+      caseId: Joi.string().uuid().optional(),
       startDate: Joi.date().iso().optional(),
       endDate: Joi.date().iso().optional(),
-      tags: Joi.string().optional()
+      tags: Joi.string().max(100).optional()
     });
 
     const { error } = schema.validate(req.query);
@@ -70,7 +70,7 @@ export class ValidationMiddleware {
   }
 
   /**
-   * Validate evidence update payload
+   * Validate evidence update
    */
   public validateEvidenceUpdate(req: Request, _res: Response, next: NextFunction): void {
     const paramsSchema = Joi.object({
@@ -80,22 +80,11 @@ export class ValidationMiddleware {
     const bodySchema = Joi.object({
       description: Joi.string().max(1000).optional(),
       tags: Joi.alternatives().try(
-        Joi.array().items(Joi.string()),
-        Joi.string()
+        Joi.array().items(Joi.string().max(50)),
+        Joi.string().max(500)
       ).optional(),
       type: Joi.string().valid('IMAGE', 'VIDEO', 'DOCUMENT', 'AUDIO', 'OTHER').optional(),
-      metadata: Joi.object({
-        location: Joi.object({
-          latitude: Joi.number().optional(),
-          longitude: Joi.number().optional(),
-          address: Joi.string().optional()
-        }).optional(),
-        deviceInfo: Joi.object({
-          make: Joi.string().optional(),
-          model: Joi.string().optional(),
-          serialNumber: Joi.string().optional()
-        }).optional()
-      }).optional()
+      metadata: Joi.object().optional()
     });
 
     const { error: paramsError } = paramsSchema.validate(req.params);
@@ -121,7 +110,7 @@ export class ValidationMiddleware {
 
     const bodySchema = Joi.object({
       status: Joi.string().valid('UPLOADED', 'PROCESSING', 'ANALYZED', 'VERIFIED', 'REJECTED', 'ARCHIVED').required(),
-      notes: Joi.string().max(500).optional()
+      notes: Joi.string().max(1000).optional()
     });
 
     const { error: paramsError } = paramsSchema.validate(req.params);
@@ -138,25 +127,74 @@ export class ValidationMiddleware {
   }
 
   /**
-   * Validate AI analysis
+   * Validate case creation
    */
-  public validateAnalysis(req: Request, _res: Response, next: NextFunction): void {
+  public validateCaseCreate(req: Request, _res: Response, next: NextFunction): void {
+    const schema = Joi.object({
+      title: Joi.string().min(1).max(200).required(),
+      description: Joi.string().max(2000).optional(),
+      caseNumber: Joi.string().max(100).optional(),
+      status: Joi.string().valid('OPEN', 'CLOSED', 'ARCHIVED', 'PENDING').optional(),
+      priority: Joi.string().valid('LOW', 'MEDIUM', 'HIGH', 'CRITICAL').optional(),
+      tags: Joi.alternatives().try(
+        Joi.array().items(Joi.string().max(50)),
+        Joi.string().max(500)
+      ).optional(),
+      assignedTo: Joi.array().items(Joi.string().uuid()).optional(),
+      location: Joi.string().max(200).optional(),
+      incidentDate: Joi.date().iso().optional()
+    });
+
+    const { error } = schema.validate(req.body);
+    if (error) {
+      throw new AppError(error.details[0].message, 400);
+    }
+
+    next();
+  }
+
+  /**
+   * Validate case ID
+   */
+  public validateCaseId(req: Request, _res: Response, next: NextFunction): void {
+    const schema = Joi.object({
+      id: Joi.string().uuid().required()
+    });
+
+    const { error } = schema.validate(req.params);
+    if (error) {
+      throw new AppError('Invalid case ID', 400);
+    }
+
+    next();
+  }
+
+  /**
+   * Validate case update
+   */
+  public validateCaseUpdate(req: Request, _res: Response, next: NextFunction): void {
     const paramsSchema = Joi.object({
       id: Joi.string().uuid().required()
     });
 
     const bodySchema = Joi.object({
-      analysisResults: Joi.object({
-        confidence: Joi.number().min(0).max(100).required(),
-        anomaliesDetected: Joi.boolean().required(),
-        findings: Joi.array().items(Joi.object()).optional(),
-        metadata: Joi.object().optional()
-      }).required()
+      title: Joi.string().min(1).max(200).optional(),
+      description: Joi.string().max(2000).optional(),
+      caseNumber: Joi.string().max(100).optional(),
+      status: Joi.string().valid('OPEN', 'CLOSED', 'ARCHIVED', 'PENDING').optional(),
+      priority: Joi.string().valid('LOW', 'MEDIUM', 'HIGH', 'CRITICAL').optional(),
+      tags: Joi.alternatives().try(
+        Joi.array().items(Joi.string().max(50)),
+        Joi.string().max(500)
+      ).optional(),
+      assignedTo: Joi.array().items(Joi.string().uuid()).optional(),
+      location: Joi.string().max(200).optional(),
+      incidentDate: Joi.date().iso().optional()
     });
 
     const { error: paramsError } = paramsSchema.validate(req.params);
     if (paramsError) {
-      throw new AppError('Invalid evidence ID', 400);
+      throw new AppError('Invalid case ID', 400);
     }
 
     const { error: bodyError } = bodySchema.validate(req.body);
@@ -168,29 +206,7 @@ export class ValidationMiddleware {
   }
 
   /**
-   * Validate case creation payload
-   */
-  public validateCaseCreate(req: Request, _res: Response, next: NextFunction): void {
-    const schema = Joi.object({
-      title: Joi.string().trim().min(1).max(200).required(),
-      description: Joi.string().allow('', null).max(2000).optional(),
-      tags: Joi.alternatives().try(
-        Joi.array().items(Joi.string().trim().max(50)),
-        Joi.string().trim().max(200)
-      ).optional()
-    });
-
-    const { error, value } = schema.validate(req.body ?? {}, { abortEarly: true, stripUnknown: true });
-    if (error) {
-      throw new AppError(error.details[0].message, 400);
-    }
-
-    req.body = value;
-    next();
-  }
-
-  /**
-   * Validate custody transfer
+   * Validate chain of custody transfer
    */
   public validateCustodyTransfer(req: Request, _res: Response, next: NextFunction): void {
     const paramsSchema = Joi.object({
@@ -256,18 +272,79 @@ export class ValidationMiddleware {
   }
 
   /**
-   * Generic validation function
+   * Validate analysis results
    */
-  public validate(schema: Joi.Schema, property: 'body' | 'params' | 'query' = 'body') {
-    return (req: Request, _res: Response, next: NextFunction) => {
-      const { error } = schema.validate(req[property]);
-      if (error) {
-        throw new AppError(error.details[0].message, 400);
-      }
-      next();
-    };
+  public validateAnalysis(req: Request, _res: Response, next: NextFunction): void {
+    const paramsSchema = Joi.object({
+      id: Joi.string().uuid().required()
+    });
+
+    const bodySchema = Joi.object({
+      analysisResults: Joi.object({
+        confidence: Joi.number().min(0).max(100).required(),
+        anomaliesDetected: Joi.boolean().required(),
+        findings: Joi.array().items(Joi.object()).required(),
+        metadata: Joi.object({
+          analysisId: Joi.string().required(),
+          evidenceId: Joi.string().required(),
+          analysisType: Joi.string().optional(),
+          completedAt: Joi.date().iso().required()
+        }).required()
+      }).required()
+    });
+
+    const { error: paramsError } = paramsSchema.validate(req.params);
+    if (paramsError) {
+      throw new AppError('Invalid evidence ID', 400);
+    }
+
+    const { error: bodyError } = bodySchema.validate(req.body);
+    if (bodyError) {
+      throw new AppError(bodyError.details[0].message, 400);
+    }
+
+    next();
+  }
+
+  /**
+   * Validate blockchain submission
+   */
+  public validateBlockchainSubmission(req: Request, _res: Response, next: NextFunction): void {
+    const paramsSchema = Joi.object({
+      id: Joi.string().uuid().required()
+    });
+
+    const bodySchema = Joi.object({
+      network: Joi.string().optional()
+    });
+
+    const { error: paramsError } = paramsSchema.validate(req.params);
+    if (paramsError) {
+      throw new AppError('Invalid evidence ID', 400);
+    }
+
+    const { error: bodyError } = bodySchema.validate(req.body);
+    if (bodyError) {
+      throw new AppError(bodyError.details[0].message, 400);
+    }
+
+    next();
+  }
+
+  /**
+   * Validate create/update report request
+   */
+  public validateCreateReport(req: Request, _res: Response, next: NextFunction): void {
+    const schema = Joi.object({
+      evidenceId: Joi.string().uuid().required(),
+      analysisId: Joi.string().required()
+    });
+
+    const { error } = schema.validate(req.body);
+    if (error) {
+      throw new AppError(error.details[0].message, 400);
+    }
+
+    next();
   }
 }
-
-export default ValidationMiddleware;
-

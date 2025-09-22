@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { evidenceService } from '../services/evidenceService';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/apiService';
@@ -10,6 +10,7 @@ import { toast } from 'react-toastify';
 
 export const AnalysisResults: React.FC = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { token } = useAuth();
 
   const [page, setPage] = useState(1);
@@ -218,12 +219,8 @@ export const AnalysisResults: React.FC = () => {
     onError: (err: any) => { toast.error(err.message || 'Failed to fetch results'); }
   });
 
-  const handleView = async (evidenceId: string) => {
-    const res = await viewMutation.mutateAsync(evidenceId);
-    const r: Partial<AIAnalysisResult> | undefined = (res as any);
-    if (!r) return;
-    const conf = Math.round((r.confidence || 0) * 100) / 100;
-    toast.success(`Analysis ${r.analysisId || ''} • Confidence: ${conf}% • Anomalies: ${r.anomaliesDetected ? 'Yes' : 'No'}`);
+  const handleView = (evidenceId: string) => {
+    navigate(`/analysis/${evidenceId}/report`);
   };
 
   return (

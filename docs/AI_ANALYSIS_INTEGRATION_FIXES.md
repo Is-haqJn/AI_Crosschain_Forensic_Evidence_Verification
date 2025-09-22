@@ -30,6 +30,40 @@ This document outlines the fixes applied to resolve the AI analysis integration 
 
 ## Fixes Implemented
 
+### 0. September 2025 Rebuild Highlights
+
+- Processors now await async model retrieval (`get_model`) to avoid race conditions.
+- `submit_analysis` computes file size reliably when `UploadFile.size` is missing by reading the stream and rewinding.
+- Message Queue is initialized at startup for accurate `/ready` and future task distribution.
+- Real persistence implemented:
+  - MongoDB: requests log, status updates, and detailed results via existing `DatabaseService` helpers.
+  - Redis: continues to cache status/results for fast reads.
+- Evidence service callback hardened:
+  - Robust payload mapping; graceful handling of HTTP errors from evidence-service.
+  - Detailed logs, no pipeline crash if callback fails.
+- Result serialization improvements:
+  - Deep-serialize Pydantic/Enum/Datetime to plain JSON.
+  - Add UI-friendly fields `confidence_percent` (0–100) and `processing_time_ms`.
+
+Commands used:
+
+```bash
+docker compose -f docker-compose.dev.yml build ai-analysis-service
+docker compose -f docker-compose.dev.yml up -d ai-analysis-service
+curl -s http://localhost:8001/health | jq .
+```
+
+What worked:
+- Startup succeeds without full DB/MQ in dev; when configured, MQ connects proactively.
+- Image/video/audio/document processors return structured, typed results.
+
+What didn’t:
+- If `JWT_SECRET` mismatches between services, callbacks/requests are rejected; ensure both services share the same secret.
+
+Current state:
+- Endpoints: `/api/v1/submit`, `/status/{id}`, `/results/{id}`, `/types`, `/queue/status`.
+- Persistence: Mongo-backed for requests/status/results, Redis-backed cache, HTTP callback to evidence-service.
+
 ### 1. Enhanced File Validation (`file_handler.py`)
 
 **Changes Made**:
@@ -229,6 +263,12 @@ evidence-service:
    docker-compose -f docker-compose.dev.yml logs ai-analysis-service --tail=20
    docker-compose -f docker-compose.dev.yml logs evidence-service --tail=20
    ```
+
+## Interpretation Notes
+
+- Confidence shown in the UI is a normalized decision confidence, not probability of truth. A 0% can occur when sub-scores (manipulation, similarity, quality) are near zero; it does not imply “manipulated,” only “no strong signals found.”
+- Processing time in the API may originate as seconds; we normalize to `processing_time_ms` for consistent display.
+- Small or low-texture images may yield unknown EXIF/quality fields and low confidence. This is expected for thumbnails and compressed assets.
 
 ## Future Improvements
 

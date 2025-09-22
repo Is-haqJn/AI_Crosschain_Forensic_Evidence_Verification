@@ -216,6 +216,11 @@ class AIAnalysisApplication:
                 # Force initialization of services
                 db_service.is_ready
                 redis_cache.is_ready
+                # Initialize message queue proactively for readiness
+                try:
+                    await message_queue.initialize()
+                except Exception as mq_err:
+                    logger.warning(f"Message queue initialization failed: {mq_err}")
 
                 # Load ML models
                 await self._load_ml_models()
@@ -232,7 +237,10 @@ class AIAnalysisApplication:
             try:
                 # Close connections
                 await db_service.close()
-                await message_queue.close()
+                try:
+                    await message_queue.close()
+                except Exception as mq_close_err:
+                    logger.warning(f"Message queue close failed: {mq_close_err}")
                 await redis_cache.close()
                 
                 logger.info(f"{self.settings.SERVICE_NAME} shut down successfully")

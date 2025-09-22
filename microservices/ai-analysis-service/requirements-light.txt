@@ -24,6 +24,7 @@ Pillow==11.3.0
 scikit-learn==1.5.2
 opencv-python-headless==4.12.0.88
 imagehash==4.3.2
+pytesseract==0.3.13
 
 # Document Analysis (essential)
 PyPDF2==3.0.1

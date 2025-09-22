@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Layout } from './components/Layout';
@@ -11,6 +11,7 @@ import { EvidenceDetail } from './pages/EvidenceDetail';
 import { CasesList } from './pages/CasesList';
 import { CaseDetail } from './pages/CaseDetail';
 import { AnalysisResults } from './pages/AnalysisResults';
+import { AnalysisReport } from './pages/AnalysisReport';
 import { Settings } from './pages/Settings';
 import { Users } from './pages/Users';
 import { NotFound } from './pages/NotFound';
@@ -37,6 +38,7 @@ function App() {
             <Route path="cases" element={<CasesList />} />
             <Route path="cases/:id" element={<CaseDetail />} />
             <Route path="analysis" element={<AnalysisResults />} />
+            <Route path="analysis/:evidenceId/report" element={<AnalysisReport />} />
             <Route path="settings" element={<Settings />} />
             <Route path="admin/users" element={<Users />} />
           </Route>

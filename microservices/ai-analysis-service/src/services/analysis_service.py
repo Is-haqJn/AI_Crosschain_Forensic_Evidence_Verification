@@ -43,37 +43,61 @@ class AnalysisService:
         self.mq_manager = message_queue
 
     def _to_jsonable(self, data: Any) -> Any:
-        """Convert pydantic models or custom objects to JSON-serializable structures."""
-        try:
-            # Pydantic v2 first
-            if hasattr(data, "model_dump") and callable(getattr(data, "model_dump")):
-                # Use mode='json' to ensure datetime objects are serialized as strings
-                return data.model_dump(mode='json')  # type: ignore[attr-defined]
-        except Exception:
-            pass
-        try:
-            # Pydantic v1 fallback
-            if hasattr(data, "dict") and callable(getattr(data, "dict")):
-                return data.dict()  # type: ignore[attr-defined]
-        except Exception:
-            pass
-        # If already a primitive/dict/list, return as is
-        if isinstance(data, (dict, list, str, int, float, bool)) or data is None:
+        """Convert pydantic/enum/datetime-rich structures into JSON-serializable ones (deep)."""
+        # Primitives
+        if data is None or isinstance(data, (str, int, float, bool)):
             return data
-        # Best-effort conversion with proper datetime handling
+        # Datetime
+        try:
+            from datetime import datetime as _dt
+            if isinstance(data, _dt):
+                return data.isoformat()
+        except Exception:
+            pass
+        # Enum
+        try:
+            from enum import Enum as _Enum
+            if isinstance(data, _Enum):  # type: ignore[arg-type]
+                return data.value  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        # Pydantic v2
+        try:
+            if hasattr(data, "model_dump") and callable(getattr(data, "model_dump")):
+                return self._to_jsonable(getattr(data, "model_dump")(mode="python"))  # type: ignore[misc]
+        except Exception:
+            pass
+        # Pydantic v1
+        try:
+            if hasattr(data, "dict") and callable(getattr(data, "dict")):
+                return self._to_jsonable(getattr(data, "dict")())  # type: ignore[misc]
+        except Exception:
+            pass
+        # Mapping
+        if isinstance(data, dict):
+            return {str(k): self._to_jsonable(v) for k, v in data.items()}
+        # Iterable
+        try:
+            if isinstance(data, (list, tuple, set)):
+                return [self._to_jsonable(v) for v in list(data)]
+        except Exception:
+            pass
+        # Fallback best-effort
         try:
             return json.loads(json.dumps(data, default=lambda o: getattr(o, "isoformat", lambda: str(o))()))
         except Exception:
             return str(data)
 
     def _serialize_analysis_result(self, result: Any) -> Dict[str, Any]:
-        """Specialized serialization for analysis results"""
+        """Deep-serialize analysis results into plain JSON-compatible dicts."""
         try:
-            # Try direct JSON serialization first
-            return json.loads(json.dumps(result, default=lambda o: getattr(o, "isoformat", lambda: str(o))()))
+            jsonable = self._to_jsonable(result)
+            # Ensure dict at top level
+            if isinstance(jsonable, dict):
+                return jsonable
+            return {"result": jsonable, "timestamp": datetime.utcnow().isoformat()}
         except Exception as e:
             logger.warning(f"Failed to serialize analysis result: {e}")
-            # Fallback to basic structure
             return {
                 "analysis_id": getattr(result, "analysis_id", "unknown"),
                 "evidence_id": getattr(result, "evidence_id", "unknown"),
@@ -459,6 +483,18 @@ class AnalysisService:
         try:
             # Serialize results first
             serialized_results = self._serialize_analysis_result(results)
+            # Ensure presence of normalized fields for UI: confidence (0..100), processingTime ms
+            try:
+                if isinstance(serialized_results, dict):
+                    raw_conf = serialized_results.get("confidence_score")
+                    if isinstance(raw_conf, (int, float)):
+                        serialized_results["confidence_percent"] = int(100 * raw_conf) if raw_conf <= 1.0 else int(raw_conf)
+                    # Normalize processing time: if seconds (<100) convert to ms
+                    raw_pt = serialized_results.get("processing_time")
+                    if isinstance(raw_pt, (int, float)):
+                        serialized_results["processing_time_ms"] = int(raw_pt * 1000) if 0 < raw_pt < 100 else int(raw_pt)
+            except Exception:
+                pass
 
             # Send via message queue if available
             if self._mq_ready():
@@ -477,8 +513,23 @@ class AnalysisService:
     async def _store_analysis_request(self, request: AnalysisRequest):
         """Store analysis request in database"""
         if self._db_ready():
-            # Would implement database storage
-            pass
+            try:
+                # Prefer Mongo for request log (schemaless)
+                collection = await self.db_manager.get_mongodb_collection('analysis_requests')
+                await collection.insert_one({
+                    "analysis_id": request.analysis_id,
+                    "evidence_id": request.evidence_id,
+                    "analysis_type": request.analysis_type,
+                    "file_name": request.file_name,
+                    "file_size": request.file_size,
+                    "priority": int(request.priority),
+                    "metadata": request.metadata,
+                    "user_id": request.user_id,
+                    "submitted_at": request.submitted_at,
+                    "status": "pending"
+                })
+            except Exception as e:
+                logger.debug(f"Failed to store analysis request: {e}")
     
     async def _cache_analysis_status(
         self,
@@ -598,8 +649,11 @@ class AnalysisService:
         
         # Store in database
         if self._db_ready():
-            # Would implement database storage
-            pass
+            try:
+                # Detailed results in MongoDB
+                await self.db_manager.store_detailed_results(analysis_id, serialized_results)
+            except Exception as e:
+                logger.debug(f"Failed to persist results to DB: {e}")
     
     async def _send_results_via_mq(self, analysis_id: str, evidence_id: str, results: Dict[str, Any]):
         """Send results via message queue"""
@@ -627,41 +681,204 @@ class AnalysisService:
                 "organization": "forensic-evidence-system"
             }
             token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+
+            # Build evidence-service compliant payload
+            try:
+                evidence_payload = self._build_evidence_analysis_payload(analysis_id, evidence_id, results)
+            except Exception as e:
+                # Fallback to a minimal, valid shape
+                logger.warning(f"Failed to build evidence payload, using fallback: {e}")
+                evidence_payload = {
+                    "analysisResults": {
+                        "confidence": 0,
+                        "anomaliesDetected": False,
+                        "findings": [],
+                        "metadata": {
+                            "analysisId": analysis_id,
+                            "evidenceId": evidence_id,
+                            "error": "payload_build_failed"
+                        }
+                    }
+                }
             async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{settings.EVIDENCE_SERVICE_URL}/api/v1/evidence/{evidence_id}/analysis",
-                    json={
-                        "analysis_id": analysis_id,
-                        "results": self._serialize_analysis_result(results),
-                        "completed_at": datetime.utcnow().isoformat()
-                    },
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "Content-Type": "application/json"
-                    },
-                    timeout=30.0
-                )
-                response.raise_for_status()
+                try:
+                    response = await client.post(
+                        f"{settings.EVIDENCE_SERVICE_URL}/api/v1/evidence/{evidence_id}/analysis",
+                        json=evidence_payload,
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "Content-Type": "application/json"
+                        },
+                        timeout=30.0
+                    )
+                    response.raise_for_status()
+                except httpx.HTTPStatusError as http_err:
+                    # Log response body for diagnostics, but do not crash the pipeline
+                    logger.error(
+                        f"Evidence-service callback failed: status={http_err.response.status_code} body={http_err.response.text}"
+                    )
+                except Exception as e:
+                    logger.error(f"Evidence-service callback error: {e}")
                 
         except Exception as e:
             logger.error(f"Failed to send results via HTTP: {e}")
+
+    def _build_evidence_analysis_payload(self, analysis_id: str, evidence_id: str, results: Dict[str, Any]) -> Dict[str, Any]:
+        """Map internal analysis results to evidence-service schema.
+
+        evidence-service expects:
+          {
+            "analysisResults": {
+               "confidence": 0..100,
+               "anomaliesDetected": bool,
+               "findings": [ ... ],
+               "metadata": { ... }
+            }
+          }
+        """
+        result_obj: Dict[str, Any] = results if isinstance(results, dict) else self._serialize_analysis_result(results)
+
+        # Confidence normalisation (0..1 -> 0..100)
+        raw_conf = result_obj.get("confidence_score")
+        if isinstance(raw_conf, (int, float)):
+            if raw_conf <= 1.0:
+                confidence = int(max(0, min(100, round(raw_conf * 100))))
+            else:
+                confidence = int(max(0, min(100, round(raw_conf))))
+        else:
+            confidence = 0
+
+        # Detect anomalies across types
+        anomalies = False
+
+        # Image
+        img = result_obj.get("manipulation_detection") or {}
+        anomalies = anomalies or bool(img.get("is_manipulated", False))
+
+        # Video
+        vid = result_obj.get("deepfake_detection") or {}
+        anomalies = anomalies or bool(vid.get("is_deepfake", False))
+
+        # Document
+        doc = result_obj.get("authenticity_analysis") or {}
+        if isinstance(doc, dict) and "is_authentic" in doc:
+            anomalies = anomalies or (not bool(doc.get("is_authentic", True)))
+
+        # Audio
+        aud = result_obj.get("authenticity_analysis") or {}
+        if isinstance(aud, dict) and "is_authentic" in aud:
+            anomalies = anomalies or (not bool(aud.get("is_authentic", True)))
+
+        findings: List[Dict[str, Any]] = []
+        if img:
+            mt = img.get("manipulation_type")
+            if mt:
+                findings.append({"type": "image_manipulation", "manipulationType": mt, "confidence": img.get("confidence")})
+        if vid:
+            if vid.get("is_deepfake"):
+                findings.append({"type": "video_deepfake", "confidence": vid.get("confidence")})
+        if isinstance(doc, dict) and "is_authentic" in doc:
+            if not doc.get("is_authentic", True):
+                findings.append({"type": "document_forgery", "confidence": doc.get("confidence")})
+        if isinstance(aud, dict) and "is_authentic" in aud:
+            if not aud.get("is_authentic", True):
+                findings.append({"type": "audio_tampering", "confidence": aud.get("confidence")})
+
+        # Determine analysis type if available
+        analysis_type = None
+        try:
+            if analysis_id in self.active_analyses:
+                analysis_type = getattr(self.active_analyses[analysis_id]["request"], "analysis_type", None)
+        except Exception:
+            analysis_type = None
+
+        meta: Dict[str, Any] = {
+            "analysisId": analysis_id,
+            "evidenceId": evidence_id,
+            "completedAt": datetime.utcnow().isoformat(),
+        }
+        if analysis_type:
+            meta["analysisType"] = analysis_type
+
+        return {
+            "analysisResults": {
+                "confidence": confidence,
+                "anomaliesDetected": anomalies,
+                "findings": findings,
+                "metadata": meta
+            }
+        }
     
     async def _get_status_from_db(self, analysis_id: str) -> Optional[AnalysisStatus]:
         """Get status from database"""
-        # Would implement database query
-        return None
+        try:
+            collection = await self.db_manager.get_mongodb_collection('analysis_requests')
+            doc = await collection.find_one({"analysis_id": analysis_id})
+            if not doc:
+                return None
+            status_str = doc.get("status", "pending")
+            progress_val = int(doc.get("progress", 0) or 0)
+            est = doc.get("estimated_completion")
+            est_dt = None
+            try:
+                if isinstance(est, str):
+                    est_dt = datetime.fromisoformat(est)
+            except Exception:
+                est_dt = None
+            return AnalysisStatus(
+                analysis_id=analysis_id,
+                evidence_id=doc.get("evidence_id", ""),
+                status=AnalysisStatusEnum(status_str),
+                progress=progress_val,
+                estimated_completion=est_dt
+            )
+        except Exception as e:
+            logger.debug(f"DB status lookup failed: {e}")
+            return None
     
     async def _get_results_from_db(self, analysis_id: str) -> Optional[Dict[str, Any]]:
         """Get results from database"""
-        # Would implement database query
+        try:
+            result = await self.db_manager.get_detailed_results(analysis_id)
+            if result and isinstance(result, dict):
+                # Mongo returns _id; strip for API cleanliness
+                result.pop("_id", None)
+                return result.get("results") or result
+        except Exception as e:
+            logger.debug(f"DB results lookup failed: {e}")
         return None
     
     async def _get_evidence_analyses_from_db(self, evidence_id: str, skip: int, limit: int) -> List[Dict[str, Any]]:
         """Get evidence analyses from database"""
-        # Would implement database query
-        return []
+        try:
+            collection = await self.db_manager.get_mongodb_collection('analysis_requests')
+            cursor = collection.find({"evidence_id": evidence_id}).skip(int(skip)).limit(int(limit))
+            results: List[Dict[str, Any]] = []
+            async for doc in cursor:
+                results.append({
+                    "analysis_id": doc.get("analysis_id"),
+                    "analysis_type": doc.get("analysis_type"),
+                    "status": doc.get("status", "pending"),
+                    "submitted_at": (doc.get("submitted_at") or datetime.utcnow()).isoformat(),
+                    "priority": int(doc.get("priority", 3))
+                })
+            return results
+        except Exception as e:
+            logger.debug(f"DB evidence analyses query failed: {e}")
+            return []
     
     async def _update_status_in_db(self, analysis_id: str, status: str, progress: int, error_message: str):
         """Update status in database"""
-        # Would implement database update
-        pass
+        try:
+            collection = await self.db_manager.get_mongodb_collection('analysis_requests')
+            update_doc: Dict[str, Any] = {
+                "status": status,
+                "updated_at": datetime.utcnow()
+            }
+            if progress is not None:
+                update_doc["progress"] = int(progress)
+            if error_message:
+                update_doc["error_message"] = error_message
+            await collection.update_one({"analysis_id": analysis_id}, {"$set": update_doc}, upsert=True)
+        except Exception as e:
+            logger.debug(f"DB status update failed: {e}")

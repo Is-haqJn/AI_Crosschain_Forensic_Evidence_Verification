@@ -15,6 +15,7 @@ import { AuthRouter } from './routes/AuthRouter.js';
 import { HealthRouter } from './routes/HealthRouter.js';
 import { CaseRouter } from './routes/CaseRouter.js';
 import { ActivityRouter } from './routes/ActivityRouter.js';
+// import { AnalysisReportRouter } from './routes/AnalysisReportRouter.js';
 import { AnalysisMonitor } from './services/AnalysisMonitor.js';
 
 /**
@@ -147,6 +148,8 @@ export class ForensicEvidenceApp {
       this.app.use('/api/v1/cases', caseRouter.getRouter());
       const activityRouter = new ActivityRouter();
       this.app.use('/api/v1/activity', activityRouter.getRouter());
+      // const analysisReportRouter = new AnalysisReportRouter();
+      // this.app.use('/api/v1/reports', analysisReportRouter.getRouter());
 
       // 404 handler
       this.app.use((req: Request, res: Response) => {

@@ -139,7 +139,7 @@ class AudioProcessor:
         """Identify voice characteristics and speaker"""
         try:
             # Get voice identification model
-            model = self.model_manager.get_model("audio_voice_identifier")
+            model = await self.model_manager.get_model("audio_voice_identifier")
             
             if model is None:
                 logger.warning("Voice identification model not loaded, using fallback")
@@ -352,10 +352,10 @@ class AudioProcessor:
         """Extract detailed voice characteristics"""
         try:
             # Extract MFCC features
-            mfccs = librosa.feature.mfcc(y=audio_data, sr=sample_rate, n_mfcc=13) if librosa else np.zeros((13, 1))  # type: ignore
+            mfccs = librosa.feature.mfcc(y=audio_data, sr=sample_rate, n_mfcc=13) if librosa is not None else np.zeros((13, 1))  # type: ignore
             
             # Extract pitch features
-            if librosa:
+            if librosa is not None:
                 pitches, magnitudes = librosa.piptrack(y=audio_data, sr=sample_rate)  # type: ignore
                 pitch_values = pitches[pitches > 0]
             else:
@@ -363,7 +363,7 @@ class AudioProcessor:
                 pitch_values = np.array([])
             
             # Extract formant-like features
-            spectral_centroids = librosa.feature.spectral_centroid(y=audio_data, sr=sample_rate)[0] if librosa else np.array([0.0])  # type: ignore
+            spectral_centroids = librosa.feature.spectral_centroid(y=audio_data, sr=sample_rate)[0] if librosa is not None else np.array([0.0])  # type: ignore
             
             return {
                 "mfcc_mean": np.mean(mfccs, axis=1).tolist(),
@@ -383,7 +383,7 @@ class AudioProcessor:
         try:
             # Calculate basic statistics
             rms_energy = np.sqrt(np.mean(audio_data**2))
-            zero_crossing_rate = np.mean(librosa.feature.zero_crossing_rate(audio_data)[0])
+            zero_crossing_rate = float(np.mean(librosa.feature.zero_crossing_rate(audio_data)[0])) if librosa is not None else 0.0
             
             # Simple voice activity detection
             energy_threshold = 0.01

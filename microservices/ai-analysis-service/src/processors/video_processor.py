@@ -104,7 +104,7 @@ class VideoProcessor:
         return cap
 
     async def _detect_deepfake(self, video_capture, file_path: str) -> DeepfakeDetectionResult:
-        model = self.model_manager.get_model("video_deepfake_detector")
+        model = await self.model_manager.get_model("video_deepfake_detector")
         if model is None:
             return await self._fallback_deepfake_detection(video_capture)
         frames = await self._sample_frames_for_analysis(video_capture, sample_count=30)
