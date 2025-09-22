@@ -1,5 +1,0 @@
-- remember to keep logs and documentation of what worked, what didnt work, how did we fix it, what commands were used, what we learnt and the current phase of the project along with next steps
-- also remember no test files, only real implementations and also no demos or env variables hardcoded into the files. I need clean OOP microservice architecture and the best way to implement them
-- Always use updated dependencies(search the internet if you like) i dont want any memory leaks or out of date warnings in any of the packages.json and the likes. everything has to be current, secure and very reliable. No zero day attacks. Also i am using crosschain, not a single chain
-- remember to keep proper documentation of all your processes please. save it in the docs drectory
-- remember no test files or simple test files. only real implementation. dont give up on fixing issues. take your time and analyse the issues well and search the web if you need to to fix it
