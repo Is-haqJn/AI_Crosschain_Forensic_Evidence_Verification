@@ -5,19 +5,8 @@ class AuthService {
   private token: string | null = null;
   private user: User | null = null;
 
-  private readonly LOGIN_URL: string = (
-    process.env.REACT_APP_AUTH_LOGIN_URL ||
-    (process.env.REACT_APP_EVIDENCE_SERVICE_URL
-      ? `${process.env.REACT_APP_EVIDENCE_SERVICE_URL}/auth/login`
-      : 'http://localhost:3001/api/v1/auth/login')
-  );
-
-  private readonly ME_URL: string = (
-    process.env.REACT_APP_AUTH_ME_URL ||
-    (process.env.REACT_APP_EVIDENCE_SERVICE_URL
-      ? `${process.env.REACT_APP_EVIDENCE_SERVICE_URL}/auth/me`
-      : 'http://localhost:3001/api/v1/auth/me')
-  );
+  private readonly LOGIN_URL: string = '/api/v1/auth/login';
+  private readonly ME_URL: string = '/api/v1/auth/me';
 
   async login(credentials: LoginForm): Promise<{ user: User; token: string }> {
     if (!credentials.email || !credentials.password) {

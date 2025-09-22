@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from 'react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { evidenceService } from '../services/evidenceService';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,26 +18,24 @@ export const AnalysisResults: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState<'' | keyof typeof EvidenceType>('');
   const [search, setSearch] = useState('');
 
-  const { data, isLoading, isError, error, refetch, isFetching } = useQuery(
-    ['analysis-evidence', page, limit, statusFilter, typeFilter, search],
-    () => evidenceService.getEvidenceList(page, limit, {
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+    queryKey: ['analysis-evidence', page, limit, statusFilter, typeFilter, search],
+    queryFn: () => evidenceService.getEvidenceList(page, limit, {
       status: statusFilter || undefined,
       type: typeFilter || undefined,
       search: search || undefined,
     }),
-    {
-      keepPreviousData: true,
-      refetchOnWindowFocus: false,
-      enabled: !!token,
-      retry: (failureCount, error) => {
-        const status = (error as any)?.response?.status;
-        if (status === 401 || status === 403) {
-          return false;
-        }
-        return failureCount < 2;
+    placeholderData: (previousData: any) => previousData,
+    refetchOnWindowFocus: false,
+    enabled: !!token,
+    retry: (failureCount: number, error: any) => {
+      const status = (error as any)?.response?.status;
+      if (status === 401 || status === 403) {
+        return false;
       }
+      return failureCount < 2;
     }
-  );
+  });
 
   const items: Evidence[] = useMemo(() => {
     const list: Evidence[] = (data?.data as unknown as Evidence[]) || [];
@@ -46,6 +44,7 @@ export const AnalysisResults: React.FC = () => {
 
   // Row-level AI status polling state
   const [pollingMap, setPollingMap] = useState<Record<string, boolean>>({});
+  const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
   const [aiRowStatus, setAiRowStatus] = useState<Record<string, { label: string; progress?: number }>>({});
   const pollersRef = useRef<Record<string, number>>({});
   const pollStateRef = useRef<Record<string, { phase: 'awaitId' | 'status'; attempt: number; delayMs: number; analysisId?: string }>>({});
@@ -95,17 +94,20 @@ export const AnalysisResults: React.FC = () => {
         }
 
         if (state.phase === 'status' && state.analysisId) {
-          // Prefer querying AI service directly to reduce load on evidence-service
-          const raw = await apiService.getAIAnalysisStatusDirect(state.analysisId);
-          const s: string = raw?.status || '';
-          const progress: number | undefined = raw?.progress;
+          // Query via evidence-service (handles S2S auth to AI service)
+          const statusRes = await evidenceService.getAIAnalysisStatus(id);
+          const s: string = (statusRes as any)?.status || '';
+          const progress: number | undefined = (statusRes as any)?.progress;
           const label = s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Processing';
           setStatus(id, label, typeof progress === 'number' ? Math.max(0, Math.min(100, progress)) : undefined);
 
           if (['completed', 'failed', 'error'].includes(String(s).toLowerCase())) {
             stopPolling(id);
-            queryClient.invalidateQueries('analysis-evidence');
-            queryClient.invalidateQueries(['evidence', id]);
+            queryClient.invalidateQueries({ queryKey: ['analysis-evidence'] });
+            queryClient.invalidateQueries({ queryKey: ['evidence', id] });
+            // Also refresh dashboard snapshots and activity feed
+            queryClient.invalidateQueries({ queryKey: ['evidence-list'] });
+            queryClient.invalidateQueries({ queryKey: ['recent-activity'] });
             if (String(s).toLowerCase() === 'completed') {
               toast.success('Analysis completed');
             }
@@ -154,37 +156,67 @@ export const AnalysisResults: React.FC = () => {
     };
   }, []);
 
-  const statusMutation = useMutation(
-    async (evidenceId: string) => evidenceService.getAIAnalysisStatus(evidenceId),
-    {
-      onSuccess: (_res, evidenceId) => {
-        toast.info('Status updated');
-        queryClient.invalidateQueries(['evidence', evidenceId]);
-        queryClient.invalidateQueries('analysis-evidence');
-      },
-      onError: (err: any) => { toast.error(err.message || 'Failed to fetch status'); }
+  const statusMutation = useMutation({
+    mutationFn: async (evidenceId: string) => evidenceService.getAIAnalysisStatus(evidenceId),
+    onSuccess: (_res: any, evidenceId: string) => {
+      toast.info('Status updated successfully');
+      queryClient.invalidateQueries({ queryKey: ['evidence', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['analysis-evidence'] });
+    },
+    onError: (err: any) => { 
+      console.error('Status fetch error:', err);
+      
+      let errorMessage = 'Failed to fetch status';
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      if (err.response?.status) {
+        errorMessage = `${errorMessage} (Status: ${err.response.status})`;
+      }
+      
+      toast.error(errorMessage);
     }
-  );
+  });
 
-  const analyzeMutation = useMutation(
-    async (vars: { id: string; analysisType: string }) => evidenceService.submitForAIAnalysis(vars.id, vars.analysisType),
-    {
-      onSuccess: (_res, vars) => {
-        toast.success('Analysis started');
-        queryClient.invalidateQueries(['evidence', vars.id]);
-        queryClient.invalidateQueries('analysis-evidence');
-        startPolling(vars.id);
-      },
-      onError: (err: any) => { toast.error(err.message || 'Failed to start analysis'); }
+  const handleAnalyze = async (evidenceId: string, analysisType: string) => {
+    try {
+      setLoadingMap(prev => ({ ...prev, [evidenceId]: true }));
+      await evidenceService.submitForAIAnalysis(evidenceId, analysisType);
+      toast.success('Analysis started successfully');
+      queryClient.invalidateQueries({ queryKey: ['evidence', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['analysis-evidence'] });
+      startPolling(evidenceId);
+    } catch (err: any) {
+      console.error('Analysis submission error:', err);
+      
+      // Extract detailed error information
+      let errorMessage = 'Failed to start analysis';
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      // Add status code info if available
+      if (err.response?.status) {
+        errorMessage = `${errorMessage} (Status: ${err.response.status})`;
+      }
+      
+      toast.error(errorMessage, { 
+        autoClose: 6000,  // Show longer for error messages
+      });
+    } finally {
+      setLoadingMap(prev => ({ ...prev, [evidenceId]: false }));
     }
-  );
+  };
 
-  const viewMutation = useMutation(
-    async (evidenceId: string) => evidenceService.getAIAnalysisResults(evidenceId),
-    {
-      onError: (err: any) => { toast.error(err.message || 'Failed to fetch results'); }
-    }
-  );
+  const viewMutation = useMutation({
+    mutationFn: async (evidenceId: string) => evidenceService.getAIAnalysisResults(evidenceId),
+    onError: (err: any) => { toast.error(err.message || 'Failed to fetch results'); }
+  });
 
   const handleView = async (evidenceId: string) => {
     const res = await viewMutation.mutateAsync(evidenceId);
@@ -209,14 +241,14 @@ export const AnalysisResults: React.FC = () => {
             placeholder="Search by ID or filename"
             className="input"
           />
-          <select className="select" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as any)}>
+          <select className="select" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as '' | keyof typeof EvidenceType)}>
             <option value="">All Types</option>
             <option value="IMAGE">Image</option>
             <option value="VIDEO">Video</option>
             <option value="DOCUMENT">Document</option>
             <option value="AUDIO">Audio</option>
           </select>
-          <select className="select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}>
+          <select className="select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as '' | keyof typeof EvidenceStatus)}>
             <option value="">All Status</option>
             <option value="PROCESSING">Processing</option>
             <option value="ANALYZED">Analyzed</option>
@@ -277,41 +309,85 @@ export const AnalysisResults: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 text-sm text-right space-x-2">
                           {pollingMap[e.evidenceId] ? (
-                            <span className="inline-flex items-center space-x-2 text-indigo-700">
+                            <div className="inline-flex items-center space-x-2 text-indigo-700">
                               <LoadingSpinner size="sm" />
-                              <span>
+                              <span className="text-sm">
                                 {aiRowStatus[e.evidenceId]?.label || 'Analyzing...'}
                                 {typeof aiRowStatus[e.evidenceId]?.progress === 'number' ? ` ${aiRowStatus[e.evidenceId]?.progress}%` : ''}
                               </span>
-                            </span>
+                            </div>
                           ) : !ai.analysisId ? (
                             <button
-                              className="px-3 py-1 rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
-                              onClick={() => analyzeMutation.mutate({ id: e.evidenceId, analysisType })}
-                              disabled={analyzeMutation.isLoading}
+                              className={`px-3 py-1 rounded-md text-white transition-colors ${
+                                loadingMap[e.evidenceId] 
+                                  ? 'bg-gray-400 cursor-not-allowed' 
+                                  : 'bg-indigo-600 hover:bg-indigo-700'
+                              }`}
+                              onClick={() => handleAnalyze(e.evidenceId, analysisType)}
+                              disabled={loadingMap[e.evidenceId]}
                             >
-                              Analyze
+                              {loadingMap[e.evidenceId] ? (
+                                <span className="inline-flex items-center space-x-1">
+                                  <LoadingSpinner size="sm" />
+                                  <span>Starting...</span>
+                                </span>
+                              ) : (
+                                'Analyze'
+                              )}
                             </button>
                           ) : (
-                            <>
+                            <div className="flex items-center space-x-2">
                               {aiRowStatus[e.evidenceId]?.label && (
-                                <span className="mr-2 text-gray-500">{aiRowStatus[e.evidenceId]?.label}{typeof aiRowStatus[e.evidenceId]?.progress === 'number' ? ` ${aiRowStatus[e.evidenceId]?.progress}%` : ''}</span>
+                                <span className="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                                  {aiRowStatus[e.evidenceId]?.label}
+                                  {typeof aiRowStatus[e.evidenceId]?.progress === 'number' ? ` ${aiRowStatus[e.evidenceId]?.progress}%` : ''}
+                                </span>
                               )}
                               <button
-                                className="px-3 py-1 rounded-md text-indigo-700 border border-indigo-200 hover:bg-indigo-50"
+                                className={`px-3 py-1 rounded-md border transition-colors ${
+                                  statusMutation.isPending 
+                                    ? 'border-gray-300 text-gray-400 cursor-not-allowed' 
+                                    : 'text-indigo-700 border-indigo-200 hover:bg-indigo-50'
+                                }`}
                                 onClick={() => statusMutation.mutate(e.evidenceId)}
-                                disabled={statusMutation.isLoading}
+                                disabled={statusMutation.isPending}
                               >
-                                Check Status
+                                {statusMutation.isPending ? (
+                                  <span className="inline-flex items-center space-x-1">
+                                    <LoadingSpinner size="sm" />
+                                    <span>Checking...</span>
+                                  </span>
+                                ) : (
+                                  'Check Status'
+                                )}
+                              </button>
+                              <button
+                                className={`px-3 py-1 rounded-md border transition-colors ${
+                                  loadingMap[e.evidenceId]
+                                    ? 'border-gray-300 text-gray-400 cursor-not-allowed'
+                                    : 'text-orange-700 border-orange-200 hover:bg-orange-50'
+                                }`}
+                                onClick={() => handleAnalyze(e.evidenceId, analysisType)}
+                                disabled={loadingMap[e.evidenceId]}
+                                title="Resubmit analysis"
+                              >
+                                {loadingMap[e.evidenceId] ? (
+                                  <span className="inline-flex items-center space-x-1">
+                                    <LoadingSpinner size="sm" />
+                                    <span>Resubmitting...</span>
+                                  </span>
+                                ) : (
+                                  'Resubmit'
+                                )}
                               </button>
                               <button
                                 className="px-3 py-1 rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
                                 onClick={() => handleView(e.evidenceId)}
-                                disabled={viewMutation.isLoading}
+                                disabled={viewMutation.isPending}
                               >
                                 View Report
                               </button>
-                            </>
+                            </div>
                           )}
                         </td>
                       </tr>

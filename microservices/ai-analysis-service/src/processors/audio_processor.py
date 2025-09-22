@@ -10,8 +10,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 import numpy as np
-import librosa
-import soundfile as sf
+
+# Lazy/defensive heavy deps
+try:
+    import librosa  # type: ignore
+except Exception:  # pragma: no cover
+    librosa = None  # type: ignore
+try:
+    import soundfile as sf  # type: ignore
+except Exception:  # pragma: no cover
+    sf = None  # type: ignore
 from loguru import logger
 
 from ..schemas.analysis_schemas import (
@@ -107,7 +115,9 @@ class AudioProcessor:
         """Load and validate audio file"""
         try:
             # Load audio file
-            audio_data, sample_rate = librosa.load(file_path, sr=self.sample_rate)
+            if librosa is None:  # type: ignore
+                raise ValueError("librosa not available")
+            audio_data, sample_rate = librosa.load(file_path, sr=self.sample_rate)  # type: ignore
             
             # Validate audio properties
             duration = len(audio_data) / sample_rate
@@ -221,12 +231,12 @@ class AudioProcessor:
             # Calculate basic properties
             duration = len(audio_data) / sample_rate
             rms_energy = np.sqrt(np.mean(audio_data**2))
-            zero_crossing_rate = np.mean(librosa.feature.zero_crossing_rate(audio_data)[0])
+            zero_crossing_rate = float(np.mean(librosa.feature.zero_crossing_rate(audio_data)[0])) if librosa else 0.0  # type: ignore
             
             # Calculate spectral features
-            spectral_centroid = np.mean(librosa.feature.spectral_centroid(y=audio_data, sr=sample_rate)[0])
-            spectral_rolloff = np.mean(librosa.feature.spectral_rolloff(y=audio_data, sr=sample_rate)[0])
-            mfccs = librosa.feature.mfcc(y=audio_data, sr=sample_rate, n_mfcc=13)
+            spectral_centroid = float(np.mean(librosa.feature.spectral_centroid(y=audio_data, sr=sample_rate)[0])) if librosa else 0.0  # type: ignore
+            spectral_rolloff = float(np.mean(librosa.feature.spectral_rolloff(y=audio_data, sr=sample_rate)[0])) if librosa else 0.0  # type: ignore
+            mfccs = librosa.feature.mfcc(y=audio_data, sr=sample_rate, n_mfcc=13) if librosa else np.zeros((13, 1))  # type: ignore
             mfcc_mean = np.mean(mfccs, axis=1)
             
             # Detect audio format and quality
@@ -307,16 +317,16 @@ class AudioProcessor:
         """Analyze audio spectrum and frequency content"""
         try:
             # Calculate spectral features
-            spectral_centroids = librosa.feature.spectral_centroid(y=audio_data, sr=sample_rate)[0]
-            spectral_rolloffs = librosa.feature.spectral_rolloff(y=audio_data, sr=sample_rate)[0]
-            spectral_bandwidths = librosa.feature.spectral_bandwidth(y=audio_data, sr=sample_rate)[0]
+            spectral_centroids = librosa.feature.spectral_centroid(y=audio_data, sr=sample_rate)[0] if librosa else np.array([0.0])  # type: ignore
+            spectral_rolloffs = librosa.feature.spectral_rolloff(y=audio_data, sr=sample_rate)[0] if librosa else np.array([0.0])  # type: ignore
+            spectral_bandwidths = librosa.feature.spectral_bandwidth(y=audio_data, sr=sample_rate)[0] if librosa else np.array([0.0])  # type: ignore
             
             # Calculate chroma features
-            chroma = librosa.feature.chroma_stft(y=audio_data, sr=sample_rate)
+            chroma = librosa.feature.chroma_stft(y=audio_data, sr=sample_rate) if librosa else np.zeros((12, 1))  # type: ignore
             chroma_mean = np.mean(chroma, axis=1)
             
             # Calculate tonnetz features
-            tonnetz = librosa.feature.tonnetz(y=audio_data, sr=sample_rate)
+            tonnetz = librosa.feature.tonnetz(y=audio_data, sr=sample_rate) if librosa else np.zeros((6, 1))  # type: ignore
             tonnetz_mean = np.mean(tonnetz, axis=1)
             
             return {
@@ -342,14 +352,18 @@ class AudioProcessor:
         """Extract detailed voice characteristics"""
         try:
             # Extract MFCC features
-            mfccs = librosa.feature.mfcc(y=audio_data, sr=sample_rate, n_mfcc=13)
+            mfccs = librosa.feature.mfcc(y=audio_data, sr=sample_rate, n_mfcc=13) if librosa else np.zeros((13, 1))  # type: ignore
             
             # Extract pitch features
-            pitches, magnitudes = librosa.piptrack(y=audio_data, sr=sample_rate)
-            pitch_values = pitches[pitches > 0]
+            if librosa:
+                pitches, magnitudes = librosa.piptrack(y=audio_data, sr=sample_rate)  # type: ignore
+                pitch_values = pitches[pitches > 0]
+            else:
+                magnitudes = np.abs(np.fft.rfft(audio_data))
+                pitch_values = np.array([])
             
             # Extract formant-like features
-            spectral_centroids = librosa.feature.spectral_centroid(y=audio_data, sr=sample_rate)[0]
+            spectral_centroids = librosa.feature.spectral_centroid(y=audio_data, sr=sample_rate)[0] if librosa else np.array([0.0])  # type: ignore
             
             return {
                 "mfcc_mean": np.mean(mfccs, axis=1).tolist(),

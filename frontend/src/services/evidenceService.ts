@@ -7,7 +7,7 @@ import {
   UploadProgress
 } from '../types';
 
-const API_BASE_URL = process.env.REACT_APP_EVIDENCE_SERVICE_URL || 'http://localhost:3001/api/v1';
+const API_BASE_URL = '/api/v1';
 const SUBMIT_NETWORK_DEFAULT = process.env.REACT_APP_SUBMIT_NETWORK || 'sepolia';
 const VERIFY_NETWORK_DEFAULT = process.env.REACT_APP_VERIFY_NETWORK || 'amoy';
 
@@ -172,12 +172,16 @@ class EvidenceService {
         await this.api.get(`/evidence/${evidenceId}/ai-analysis/results`);
       
       if (!response.data.success || !response.data.data) {
-        throw new Error(response.data.message || 'Failed to fetch AI analysis results');
+        const serverMsg = (response.data as any)?.error?.message || response.data.message;
+        throw new Error(serverMsg || 'Failed to fetch AI analysis results');
       }
 
       return response.data.data;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch AI analysis results');
+      const status = error?.response?.status;
+      const serverMsg = error?.response?.data?.error?.message || error?.response?.data?.message;
+      const msg = serverMsg || error?.message || 'Failed to fetch AI analysis results';
+      throw new Error(status ? `${msg} (Status: ${status})` : msg);
     }
   }
 
@@ -192,7 +196,11 @@ class EvidenceService {
 
       return response.data.data;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch AI analysis status');
+      throw new Error(
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.message ||
+        'Failed to fetch AI analysis status'
+      );
     }
   }
 

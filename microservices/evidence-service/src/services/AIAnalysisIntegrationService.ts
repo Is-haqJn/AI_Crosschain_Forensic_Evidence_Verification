@@ -94,7 +94,10 @@ export class AIAnalysisIntegrationService {
         this.logger.error('AI Service request failed after retries', {
           url: config.url,
           status: error.response?.status,
-          message: error.message
+          statusText: error.response?.statusText,
+          message: error.message,
+          responseData: error.response?.data,
+          retryCount: config._retryCount
         });
 
         return Promise.reject(error);
@@ -211,34 +214,143 @@ export class AIAnalysisIntegrationService {
     priority: number,
     metadata?: any
   ): Promise<{ analysisId: string; status: string; estimatedCompletion?: string }> {
-    // Create FormData for file upload
-    const formData = new FormData();
-    
-    formData.append('evidence_id', evidenceId);
-    formData.append('analysis_type', analysisType);
-    formData.append('file', fileBuffer, {
-      filename: fileName,
-      contentType: mimeType
-    });
-    formData.append('priority', priority.toString());
-    
-    if (metadata) {
-      formData.append('metadata', JSON.stringify(metadata));
-    }
+    try {
+      this.logger.info('Submitting analysis to AI service', {
+        evidenceId,
+        analysisType,
+        fileName,
+        fileSize: fileBuffer.length,
+        mimeType,
+        priority
+      });
 
-    // Submit to AI service
-    const response: AxiosResponse = await this.httpClient.post('/api/v1/submit', formData, {
-      headers: {
-        ...formData.getHeaders(),
-        'Authorization': `Bearer ${this.generateServiceToken()}`
+      // Validate file buffer
+      if (!fileBuffer || fileBuffer.length === 0) {
+        throw new Error('File buffer is empty or null');
       }
-    });
 
-    return {
-      analysisId: response.data.analysis_id,
-      status: response.data.status,
-      estimatedCompletion: response.data.estimated_completion
-    };
+      // Create FormData for file upload
+      const formData = new FormData();
+      
+      formData.append('evidence_id', evidenceId);
+      formData.append('analysis_type', analysisType);
+      
+      formData.append('file', fileBuffer, {
+        filename: fileName,
+        contentType: mimeType || 'application/octet-stream'
+      });
+      formData.append('priority', priority.toString());
+      
+      if (metadata) {
+        formData.append('metadata', JSON.stringify(metadata));
+      }
+
+      // Generate service token
+      const serviceToken = this.generateServiceToken();
+      this.logger.debug('Generated service token for AI service', {
+        evidenceId,
+        tokenLength: serviceToken.length
+      });
+
+      this.logger.info('Sending request to AI service', {
+        evidenceId,
+        url: `${this.httpClient.defaults.baseURL}/api/v1/submit`,
+        fileSize: fileBuffer.length,
+        fileName,
+        mimeType
+      });
+
+      // Submit to AI service
+      const response: AxiosResponse = await this.httpClient.post('/api/v1/submit', formData, {
+        headers: {
+          ...formData.getHeaders(),
+          'Authorization': `Bearer ${serviceToken}`
+        },
+        timeout: 30000 // 30 second timeout for submission
+      });
+
+      this.logger.info('AI analysis submitted successfully', {
+        evidenceId,
+        analysisId: response.data.analysis_id,
+        status: response.data.status,
+        responseStatus: response.status
+      });
+
+      return {
+        analysisId: response.data.analysis_id,
+        status: response.data.status,
+        estimatedCompletion: response.data.estimated_completion
+      };
+    } catch (error) {
+      // Enhanced error logging for better debugging
+      const errorDetails = {
+        evidenceId,
+        analysisType,
+        fileName,
+        fileSize: fileBuffer?.length || 0,
+        timestamp: new Date().toISOString()
+      };
+
+      if (error instanceof Error) {
+        if ('response' in error) {
+          const axiosError = error as any;
+          const status = axiosError.response?.status;
+          const responseData = axiosError.response?.data;
+          
+          // Log detailed response information
+          this.logger.error('AI service HTTP error response', {
+            ...errorDetails,
+            httpStatus: status,
+            statusText: axiosError.response?.statusText,
+            responseData: responseData,
+            responseHeaders: axiosError.response?.headers,
+            requestUrl: axiosError.config?.url,
+            requestMethod: axiosError.config?.method,
+            requestHeaders: axiosError.config?.headers
+          });
+
+          // Create user-friendly error message based on status
+          let userMessage = 'AI analysis submission failed';
+          if (status === 400) {
+            userMessage = `Invalid file format: ${responseData?.detail || responseData?.message || 'File format not supported for this analysis type'}`;
+          } else if (status === 429) {
+            userMessage = 'AI service is busy. Please try again later.';
+          } else if (status === 500) {
+            userMessage = 'AI service internal error. Please contact support if this persists.';
+          } else if (status === 503) {
+            userMessage = 'AI service is temporarily unavailable. Please try again later.';
+          }
+
+          throw new AppError(userMessage, status || 500);
+        } else {
+          // Network or timeout error
+          this.logger.error('AI service network/timeout error', {
+            ...errorDetails,
+            errorMessage: error.message,
+            errorCode: (error as any).code,
+            isTimeout: error.message.includes('timeout') || error.message.includes('ETIMEDOUT'),
+            isConnectionRefused: error.message.includes('ECONNREFUSED'),
+            isNetworkError: true
+          });
+
+          if (error.message.includes('timeout') || error.message.includes('ETIMEDOUT')) {
+          throw new AppError('AI service request timed out. The analysis may take longer than expected.', 408);
+          } else if (error.message.includes('ECONNREFUSED')) {
+          throw new AppError('AI service is not available. Please contact support.', 503);
+          } else {
+          throw new AppError(`Network error connecting to AI service: ${error.message}`, 503);
+          }
+        }
+      } else {
+        // Non-Error object
+        this.logger.error('AI service unknown error', {
+          ...errorDetails,
+          error: String(error),
+          errorType: typeof error
+        });
+        throw new AppError('Unknown error occurred during AI analysis submission', 500);
+      }
+    }
   }
 
   /**
@@ -257,11 +369,33 @@ export class AIAnalysisIntegrationService {
 
       return response.data;
     } catch (error) {
-      this.logger.error('Failed to get analysis status', {
-        analysisId,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      throw new AppError('Failed to get analysis status', 500);
+      if (error instanceof Error && 'response' in error) {
+        const axiosError = error as any;
+        const status = axiosError.response?.status;
+        
+        this.logger.error('Failed to get analysis status - HTTP error', {
+          analysisId,
+          httpStatus: status,
+          statusText: axiosError.response?.statusText,
+          responseData: axiosError.response?.data,
+          requestUrl: axiosError.config?.url
+        });
+
+        if (status === 404) {
+          throw new AppError('Analysis not found', 404);
+        } else if (status === 401 || status === 403) {
+          throw new AppError('Authentication failed with AI service', 401);
+        } else {
+          throw new AppError(`AI service error (${status}): ${axiosError.response?.data?.message || 'Unknown error'}`, status);
+        }
+      } else {
+        this.logger.error('Failed to get analysis status - Network error', {
+          analysisId,
+          error: error instanceof Error ? error.message : String(error),
+          errorType: typeof error
+        });
+        throw new AppError('Network error connecting to AI service', 503);
+      }
     }
   }
 
@@ -294,11 +428,31 @@ export class AIAnalysisIntegrationService {
 
       return response.data;
     } catch (error) {
-      this.logger.error('Failed to get analysis results', {
+      if (error && typeof error === 'object' && 'response' in (error as any)) {
+        const axiosError = error as any;
+        const status = axiosError.response?.status;
+        const detail = axiosError.response?.data?.detail || axiosError.response?.data?.message;
+        this.logger.error('Failed to get analysis results - HTTP error', {
+          analysisId,
+          httpStatus: status,
+          statusText: axiosError.response?.statusText,
+          responseData: axiosError.response?.data,
+          requestUrl: axiosError.config?.url
+        });
+        if (status === 404) {
+          // Propagate a clear 404 so callers can treat as "not ready yet"
+          throw new AppError(detail || 'Analysis results not found', 404);
+        }
+        if (status === 401 || status === 403) {
+          throw new AppError('Authentication failed with AI service', 401);
+        }
+        throw new AppError(`AI service error (${status || 'unknown'})`, status || 500);
+      }
+      this.logger.error('Failed to get analysis results - Network error', {
         analysisId,
         error: error instanceof Error ? error.message : String(error)
       });
-      throw new AppError('Failed to get analysis results', 500);
+      throw new AppError('Network error connecting to AI service', 503);
     }
   }
 
@@ -462,8 +616,10 @@ export class AIAnalysisIntegrationService {
     }
 
     const payload = {
-      // AI service expects a userId claim; use a service identity
+      // AI service expects specific claims for authentication
       userId: 'evidence-service',
+      id: 'evidence-service',
+      email: 'evidence-service@forensic-system.local',
       sub: 'evidence-service',
       role: 'service',
       organization: 'forensic-evidence-system'

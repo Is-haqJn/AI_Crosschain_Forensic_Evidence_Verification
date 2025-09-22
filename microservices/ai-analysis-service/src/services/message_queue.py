@@ -411,7 +411,7 @@ class MessageQueueService:
             
             return {
                 'status': 'connected',
-                'url': settings.REDIS_URL,
+                'url': settings.RABBITMQ_URL,
                 'exchanges': list(self.exchanges.keys()),
                 'queues': list(self.queues.keys()),
                 'consumers': list(self.consumers.keys()),
@@ -421,6 +421,52 @@ class MessageQueueService:
         except Exception as e:
             logger.error(f"Error getting connection info: {e}")
             return {'status': 'error', 'message': str(e)}
+    
+    async def publish_message(self, queue_name: str, message: str) -> bool:
+        """Simple method to publish a message to a queue"""
+        try:
+            if not self._connected:
+                raise RuntimeError("RabbitMQ not initialized")
+            
+            # Parse message to get analysis type if it's an analysis request
+            try:
+                message_data = json.loads(message)
+                analysis_type = message_data.get('analysis_type', 'unknown')
+            except:
+                analysis_type = 'unknown'
+            
+            # Create message
+            msg = Message(
+                message.encode(),
+                delivery_mode=DeliveryMode.PERSISTENT,
+                headers={
+                    'timestamp': datetime.utcnow().isoformat()
+                }
+            )
+            
+            # Determine routing key and exchange
+            if queue_name == settings.QUEUE_EVIDENCE_ANALYSIS:
+                routing_key = f"{analysis_type}.analysis"
+                exchange = self.exchanges.get('analysis')
+            elif queue_name == settings.QUEUE_RESULTS:
+                routing_key = 'analysis.results'
+                exchange = self.exchanges.get('results')
+            else:
+                # Default to analysis exchange
+                routing_key = 'analysis'
+                exchange = self.exchanges.get('analysis')
+            
+            if exchange:
+                await exchange.publish(msg, routing_key=routing_key)
+                logger.info(f"Published message to queue {queue_name}")
+                return True
+            else:
+                logger.error(f"Exchange not found for queue {queue_name}")
+                return False
+            
+        except Exception as e:
+            logger.error(f"Error publishing message to {queue_name}: {e}")
+            return False
 
 
 # Global message queue service instance

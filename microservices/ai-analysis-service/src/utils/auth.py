@@ -16,7 +16,9 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
         payload = jwt.decode(
             token,
             settings.JWT_SECRET,
-            algorithms=[settings.JWT_ALGORITHM]
+            algorithms=[settings.JWT_ALGORITHM],
+            audience="ai-analysis-service",
+            issuer="evidence-service"
         )
         return payload
     except jwt.ExpiredSignatureError:

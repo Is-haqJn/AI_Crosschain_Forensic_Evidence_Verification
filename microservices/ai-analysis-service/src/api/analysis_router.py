@@ -444,7 +444,7 @@ async def process_analysis_async(
         
         # Send results to evidence service
         await analysis_service.send_results_to_evidence_service(
-            analysis_id, analysis_request.evidence_id, results
+            analysis_id, analysis_request.evidence_id, analysis_service._serialize_analysis_result(results)
         )
         
         logger.info(f"Analysis completed: {analysis_id}")

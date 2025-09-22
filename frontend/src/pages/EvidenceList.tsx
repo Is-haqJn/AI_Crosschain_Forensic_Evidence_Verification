@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { evidenceService } from '../services/evidenceService';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { Evidence } from '../types';
@@ -36,57 +36,51 @@ export const EvidenceList: React.FC = () => {
 
   const [submittingId, setSubmittingId] = useState<string | null>(null);
 
-  const { data, isLoading, isError, error } = useQuery(
-    ['evidence', { page: 1, limit: 10 }],
-    () => evidenceService.getEvidenceList(1, 10),
-    {
-      refetchOnWindowFocus: false,
-      refetchOnMount: false,
-      staleTime: 60_000,
-    }
-  );
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ['evidence', { page: 1, limit: 10 }],
+    queryFn: () => evidenceService.getEvidenceList(1, 10),
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    staleTime: 60_000,
+  });
 
-  const submitMutation = useMutation(
-    ({ id, network }: { id: string; network: string }) => evidenceService.submitToBlockchain(id, network),
-    {
-      onMutate: ({ id }) => {
-        setSubmittingId(id);
-      },
-      onSuccess: (res) => {
-        const payload = res.data;
-        if (payload) {
-          const submittedNetwork = formatNetworkName(payload.network) || 'Network';
-          toast.success(`Submitted on ${submittedNetwork}${payload.transactionHash ? ` (${shortHash(payload.transactionHash)})` : ''}`);
-          if (payload.bridge) {
-            const bridgedNetwork = formatNetworkName(payload.bridge.targetNetwork) || 'Target';
-            toast.success(`Bridged to ${bridgedNetwork}${payload.bridge.transactionHash ? ` (${shortHash(payload.bridge.transactionHash)})` : ''}`);
-          }
-        } else {
-          toast.success('Submitted to blockchain');
+  const submitMutation = useMutation({
+    mutationFn: ({ id, network }: { id: string; network: string }) => evidenceService.submitToBlockchain(id, network),
+    onMutate: (variables: { id: string; network: string }) => {
+      setSubmittingId(variables.id);
+    },
+    onSuccess: (res: any) => {
+      const payload = res.data;
+      if (payload) {
+        const submittedNetwork = formatNetworkName(payload.network) || 'Network';
+        toast.success(`Submitted on ${submittedNetwork}${payload.transactionHash ? ` (${shortHash(payload.transactionHash)})` : ''}`);
+        if (payload.bridge) {
+          const bridgedNetwork = formatNetworkName(payload.bridge.targetNetwork) || 'Target';
+          toast.success(`Bridged to ${bridgedNetwork}${payload.bridge.transactionHash ? ` (${shortHash(payload.bridge.transactionHash)})` : ''}`);
         }
-        queryClient.invalidateQueries('evidence');
-      },
-      onError: (err: any) => {
-        toast.error(err?.message || 'Blockchain submission failed');
-      },
-      onSettled: () => {
-        setSubmittingId(null);
+      } else {
+        toast.success('Submitted to blockchain');
       }
+      queryClient.invalidateQueries({ queryKey: ['evidence'] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Blockchain submission failed');
+    },
+    onSettled: () => {
+      setSubmittingId(null);
     }
-  );
+  });
 
-  const verifyMutation = useMutation(
-    ({ id, network }: { id: string; network: string }) => evidenceService.verifyOnBlockchain(id, network),
-    {
-      onSuccess: (res) => {
-        const v = res.data;
-        toast.info(v?.verified ? 'Evidence verified on-chain' : 'Evidence not found on-chain');
-      },
-      onError: (err: any) => {
-        toast.error(err.message || 'Verification failed');
-      },
-    }
-  );
+  const verifyMutation = useMutation({
+    mutationFn: ({ id, network }: { id: string; network: string }) => evidenceService.verifyOnBlockchain(id, network),
+    onSuccess: (res: any) => {
+      const v = res.data;
+      toast.info(v?.verified ? 'Evidence verified on-chain' : 'Evidence not found on-chain');
+    },
+    onError: (err: any) => {
+      toast.error(err.message || 'Verification failed');
+    },
+  });
 
   if (isLoading) {
     return (
@@ -137,8 +131,8 @@ export const EvidenceList: React.FC = () => {
               const sourceNetwork = (e as any).blockchainData?.network || '';
               const targetChainId = (e as any).crossChainData?.targetChain;
               const filename = (e as any).metadata?.filename || (e as any).metadata?.originalName || '';
-              const submitDisabled = onChain || submitMutation.isLoading;
-              const isSubmitting = submitMutation.isLoading && submittingId === e.evidenceId;
+              const submitDisabled = onChain || submitMutation.isPending;
+              const isSubmitting = submitMutation.isPending && submittingId === e.evidenceId;
               return (
                 <tr key={e.evidenceId}>
                   <td className="px-6 py-4 text-sm text-blue-600">
@@ -186,7 +180,7 @@ export const EvidenceList: React.FC = () => {
                       ) : 'Submit'}
                     </button>
                     <button
-                      disabled={verifyMutation.isLoading}
+                      disabled={verifyMutation.isPending}
                       onClick={() => verifyMutation.mutate({ id: e.evidenceId, network: (process.env.REACT_APP_VERIFY_NETWORK || 'amoy') })}
                       className="px-3 py-1 rounded-md text-indigo-700 border border-indigo-200 hover:bg-indigo-50"
                     >

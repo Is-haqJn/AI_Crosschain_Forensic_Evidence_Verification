@@ -22,6 +22,7 @@ from ..schemas.analysis_schemas import (
 from ..services.database import db_service
 from ..services.redis_cache import redis_cache
 from ..services.message_queue import message_queue
+import jwt
 from ..config import get_settings
 
 settings = get_settings()
@@ -41,11 +42,53 @@ class AnalysisService:
         self.redis_cache = redis_cache
         self.mq_manager = message_queue
 
+    def _to_jsonable(self, data: Any) -> Any:
+        """Convert pydantic models or custom objects to JSON-serializable structures."""
+        try:
+            # Pydantic v2 first
+            if hasattr(data, "model_dump") and callable(getattr(data, "model_dump")):
+                # Use mode='json' to ensure datetime objects are serialized as strings
+                return data.model_dump(mode='json')  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        try:
+            # Pydantic v1 fallback
+            if hasattr(data, "dict") and callable(getattr(data, "dict")):
+                return data.dict()  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        # If already a primitive/dict/list, return as is
+        if isinstance(data, (dict, list, str, int, float, bool)) or data is None:
+            return data
+        # Best-effort conversion with proper datetime handling
+        try:
+            return json.loads(json.dumps(data, default=lambda o: getattr(o, "isoformat", lambda: str(o))()))
+        except Exception:
+            return str(data)
+
+    def _serialize_analysis_result(self, result: Any) -> Dict[str, Any]:
+        """Specialized serialization for analysis results"""
+        try:
+            # Try direct JSON serialization first
+            return json.loads(json.dumps(result, default=lambda o: getattr(o, "isoformat", lambda: str(o))()))
+        except Exception as e:
+            logger.warning(f"Failed to serialize analysis result: {e}")
+            # Fallback to basic structure
+            return {
+                "analysis_id": getattr(result, "analysis_id", "unknown"),
+                "evidence_id": getattr(result, "evidence_id", "unknown"),
+                "analysis_type": getattr(result, "analysis_type", "unknown"),
+                "confidence_score": getattr(result, "confidence_score", 0.0),
+                "processing_time": getattr(result, "processing_time", 0.0),
+                "error": "Serialization failed",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+
     def _db_ready(self) -> bool:
-        return getattr(self.db_manager, "_connected", False)
+        return getattr(self.db_manager, "is_ready", False)
 
     def _cache_ready(self) -> bool:
-        return getattr(self.redis_cache, "_connected", False)
+        return getattr(self.redis_cache, "is_ready", False)
 
     def _mq_ready(self) -> bool:
         return getattr(self.mq_manager, "_connected", False)
@@ -66,8 +109,14 @@ class AnalysisService:
             # Store analysis request in database
             await self._store_analysis_request(request)
             
-            # Cache initial status
-            await self._cache_analysis_status(request.analysis_id, "pending", 0)
+            # Cache initial status (include evidence id for recovery)
+            await self._cache_analysis_status(
+                request.analysis_id,
+                "pending",
+                0,
+                evidence_id=request.evidence_id,
+                estimated_completion=None
+            )
             
             # Add to active analyses
             self.active_analyses[request.analysis_id] = {
@@ -161,11 +210,31 @@ class AnalysisService:
             if self._cache_ready():
                 cached_results = await self.redis_cache.get(f"results:{analysis_id}")
                 if cached_results:
-                    return json.loads(cached_results)
+                    try:
+                        # If redis returned a dict (already decoded), return it
+                        if isinstance(cached_results, (dict, list)):
+                            return cached_results  # type: ignore[return-value]
+                        # If it is a JSON string, parse it
+                        if isinstance(cached_results, str):
+                            return json.loads(cached_results)
+                        # As a last resort, stringify → parse
+                        return json.loads(str(cached_results))
+                    except Exception:
+                        # If parsing fails, return as-is if it's a dict-like
+                        return cached_results  # type: ignore[return-value]
             
             # Fall back to database
             if self._db_ready():
                 return await self._get_results_from_db(analysis_id)
+            
+            # Fallback to in-memory active analyses
+            try:
+                if analysis_id in self.active_analyses:
+                    r = self.active_analyses[analysis_id].get("results")
+                    if r is not None:
+                        return r
+            except Exception:
+                pass
             
             return None
             
@@ -249,17 +318,42 @@ class AnalysisService:
                     else:
                         self.queue_metrics["total_failed"] += 1
             
-            # Update cache
-            await self._cache_analysis_status(analysis_id, status, progress or 0)
-            
-            # Store results if completed
+            # Store results first if completed (gracefully handle if not connected) so that
+            # result endpoint won't 404 briefly after status flips to completed.
             if results and status == "completed":
-                await self._store_analysis_results(analysis_id, results)
+                try:
+                    await self._store_analysis_results(analysis_id, results)
+                except Exception as e:
+                    logger.debug(f"Result storage not available: {e}")
+                # Also keep in-memory copy as a fallback for immediate reads
+                try:
+                    if analysis_id in self.active_analyses:
+                        self.active_analyses[analysis_id]["results"] = self._serialize_analysis_result(results)
+                except Exception as e:
+                    logger.warning(f"Failed to store results in memory: {e}")
+
+            # Update database (gracefully handle if not connected)
+            try:
+                if self._db_ready():
+                    await self._update_status_in_db(analysis_id, status, progress, error_message)
+            except Exception as e:
+                logger.debug(f"Database not available for status update: {e}")
             
-            # Update database
-            if self._db_ready():
-                await self._update_status_in_db(analysis_id, status, progress, error_message)
-            
+            # Update cache (gracefully handle if not connected) AFTER storing results for completed status
+            try:
+                evidence_id_cached: Optional[str] = None
+                if analysis_id in self.active_analyses:
+                    evidence_id_cached = self.active_analyses[analysis_id]["request"].evidence_id
+                await self._cache_analysis_status(
+                    analysis_id,
+                    status,
+                    progress or 0,
+                    evidence_id=evidence_id_cached,
+                    estimated_completion=None
+                )
+            except Exception as e:
+                logger.debug(f"Cache not available for status update: {e}")
+
             logger.info(f"Analysis {analysis_id} status updated: {status}")
             
         except Exception as e:
@@ -356,22 +450,25 @@ class AnalysisService:
     async def send_results_to_evidence_service(self, analysis_id: str, evidence_id: str, results: Dict[str, Any]):
         """
         Send analysis results back to the evidence service
-        
+
         Args:
             analysis_id: Analysis identifier
             evidence_id: Evidence identifier
             results: Analysis results
         """
         try:
+            # Serialize results first
+            serialized_results = self._serialize_analysis_result(results)
+
             # Send via message queue if available
             if self._mq_ready():
-                await self._send_results_via_mq(analysis_id, evidence_id, results)
-            
+                await self._send_results_via_mq(analysis_id, evidence_id, serialized_results)
+
             # Also send via HTTP API as backup
-            await self._send_results_via_http(analysis_id, evidence_id, results)
-            
+            await self._send_results_via_http(analysis_id, evidence_id, serialized_results)
+
             logger.info(f"Results sent to evidence service: {analysis_id}")
-            
+
         except Exception as e:
             logger.error(f"Failed to send results for analysis {analysis_id}: {e}")
     
@@ -383,28 +480,62 @@ class AnalysisService:
             # Would implement database storage
             pass
     
-    async def _cache_analysis_status(self, analysis_id: str, status: str, progress: int):
-        """Cache analysis status in Redis"""
+    async def _cache_analysis_status(
+        self,
+        analysis_id: str,
+        status: str,
+        progress: int,
+        *,
+        evidence_id: Optional[str] = None,
+        estimated_completion: Optional[datetime] = None
+    ):
+        """Cache analysis status in Redis with extra metadata for recovery."""
         if self._cache_ready():
-            status_data = {
+            status_data: Dict[str, Any] = {
                 "status": status,
                 "progress": progress,
                 "updated_at": datetime.utcnow().isoformat()
             }
+            if evidence_id is not None:
+                status_data["evidence_id"] = evidence_id
+            if estimated_completion is not None:
+                status_data["estimated_completion"] = estimated_completion.isoformat()
             await self.redis_cache.set(
                 f"status:{analysis_id}",
-                json.dumps(status_data),
-                expire=3600  # 1 hour
+                status_data,
+                ttl=3600  # 1 hour
             )
     
     async def _get_cached_status(self, analysis_id: str) -> Optional[AnalysisStatus]:
-        """Get cached analysis status"""
+        """Get cached analysis status and construct a response."""
         if self._cache_ready():
-            cached_data = await self.redis_cache.get(f"status:{analysis_id}")
-            if cached_data:
-                data = json.loads(cached_data)
-                # Would construct full AnalysisStatus object
-                return None  # Placeholder
+            cached = await self.redis_cache.get(f"status:{analysis_id}")
+            if cached:
+                try:
+                    data: Dict[str, Any] = cached if isinstance(cached, dict) else json.loads(str(cached))
+                    status_str: str = data.get("status", "pending")
+                    progress_val: int = int(data.get("progress", 0) or 0)
+                    evidence_id_val: Optional[str] = data.get("evidence_id")
+                    if not evidence_id_val and analysis_id in self.active_analyses:
+                        evidence_id_val = self.active_analyses[analysis_id]["request"].evidence_id
+                    if not evidence_id_val:
+                        evidence_id_val = ""
+                    est_val = data.get("estimated_completion")
+                    est_dt: Optional[datetime] = None
+                    if isinstance(est_val, str):
+                        try:
+                            est_dt = datetime.fromisoformat(est_val)
+                        except Exception:
+                            est_dt = None
+                    return AnalysisStatus(
+                        analysis_id=analysis_id,
+                        evidence_id=evidence_id_val,
+                        status=AnalysisStatusEnum(status_str),
+                        progress=progress_val,
+                        estimated_completion=est_dt
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed to parse cached status for {analysis_id}: {e}")
         return None
     
     async def _queue_analysis_request(self, request: AnalysisRequest, file_path: str):
@@ -449,13 +580,21 @@ class AnalysisService:
     
     async def _store_analysis_results(self, analysis_id: str, results: Dict[str, Any]):
         """Store analysis results"""
-        # Cache results
-        if self._cache_ready():
-            await self.redis_cache.set(
-                f"results:{analysis_id}",
-                json.dumps(results, default=str),
-                expire=86400  # 24 hours
-            )
+        try:
+            # Serialize results first
+            serialized_results = self._serialize_analysis_result(results)
+
+            # Cache results
+            if self._cache_ready():
+                await self.redis_cache.set(
+                    f"results:{analysis_id}",
+                    json.dumps(serialized_results),
+                    ttl=86400  # 24 hours
+                )
+
+            logger.info(f"Results stored for analysis {analysis_id}")
+        except Exception as e:
+            logger.error(f"Failed to store results for analysis {analysis_id}: {e}")
         
         # Store in database
         if self._db_ready():
@@ -473,19 +612,32 @@ class AnalysisService:
             }
             await self.mq_manager.publish_message(
                 settings.QUEUE_RESULTS,
-                json.dumps(message, default=str)
+                json.dumps(message, default=lambda o: getattr(o, "isoformat", lambda: str(o))())
             )
     
     async def _send_results_via_http(self, analysis_id: str, evidence_id: str, results: Dict[str, Any]):
         """Send results via HTTP API to evidence service"""
         try:
+            # Generate short-lived service token so evidence-service accepts callback
+            payload = {
+                "id": "ai-analysis-service",
+                "userId": "ai-analysis-service",
+                "email": "ai@forensic-system.local",
+                "role": "service",
+                "organization": "forensic-evidence-system"
+            }
+            token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    f"http://localhost:3001/api/v1/evidence/{evidence_id}/analysis",
+                    f"{settings.EVIDENCE_SERVICE_URL}/api/v1/evidence/{evidence_id}/analysis",
                     json={
                         "analysis_id": analysis_id,
-                        "results": results,
+                        "results": self._serialize_analysis_result(results),
                         "completed_at": datetime.utcnow().isoformat()
+                    },
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Content-Type": "application/json"
                     },
                     timeout=30.0
                 )

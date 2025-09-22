@@ -12,7 +12,7 @@ import {
   Cloud
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import { useQueryClient } from 'react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { EvidenceType } from '../types';
 import { evidenceService } from '../services/evidenceService';
 import { caseService } from '../services/caseService';
@@ -114,7 +114,7 @@ export const EvidenceUpload: React.FC = () => {
         // Optimistically update common caches and trigger refetches where needed
         try {
           // Evidence list pages
-          queryClient.invalidateQueries('evidence');
+          queryClient.invalidateQueries({ queryKey: ['evidence'] });
           queryClient.setQueryData(['evidence', { page: 1, limit: 10 }], (old: any) => {
             if (!old) return old;
             const current = Array.isArray(old?.data) ? old.data : [];
@@ -122,18 +122,18 @@ export const EvidenceUpload: React.FC = () => {
           });
 
           // Dashboard evidence snapshot
-          queryClient.invalidateQueries('evidence-list');
-          queryClient.setQueryData('evidence-list', (old: any) => {
+          queryClient.invalidateQueries({ queryKey: ['evidence-list'] });
+          queryClient.setQueryData(['evidence-list'], (old: any) => {
             if (!old) return old;
             const current = Array.isArray(old?.data) ? old.data : [];
             return { ...old, data: [ev, ...current].slice(0, 10) };
           });
 
           // Recent activity feed
-          queryClient.invalidateQueries('recent-activity');
+          queryClient.invalidateQueries({ queryKey: ['recent-activity'] });
           
           // Analysis results list (if auto-analysis is enabled)
-          queryClient.invalidateQueries('analysis-evidence');
+          queryClient.invalidateQueries({ queryKey: ['analysis-evidence'] });
         } catch (_) {
           // non-fatal cache update failure
         }

@@ -35,8 +35,9 @@ export const Users: React.FC = () => {
     }
   };
 
-  useEffect(() => { fetchUsers(); // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => { 
+    fetchUsers(); 
+  }, [token]);
 
   const onCreate = async (e: React.FormEvent) => {
     e.preventDefault();

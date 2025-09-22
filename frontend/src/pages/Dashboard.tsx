@@ -1,5 +1,5 @@
 import React from 'react';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import { 
   Shield, 
   Upload, 
@@ -10,6 +10,7 @@ import {
   Activity
 } from 'lucide-react';
 import { evidenceService } from '../services/evidenceService';
+import { caseService } from '../services/caseService';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/apiService';
 import { SkeletonText } from '../components/Skeleton';
@@ -87,60 +88,68 @@ const ActivityItem: React.FC<{
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const { token } = useAuth();
-  const { data: evidenceList, isLoading: evidenceLoading } = useQuery(
-    'evidence-list',
-    () => evidenceService.getEvidenceList(1, 10),
-    {
-      // Reduce UI churn: limit background polling and disable focus refetch
-      refetchInterval: 60000,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: true,
-      refetchOnMount: false,
-      enabled: !!token,
-    }
-  );
+  const { data: evidenceList, isLoading: evidenceLoading } = useQuery({
+    queryKey: ['evidence-list'],
+    queryFn: () => evidenceService.getEvidenceList(1, 10),
+    // Reduce UI churn: limit background polling and disable focus refetch
+    refetchInterval: 60000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+    refetchOnMount: false,
+    enabled: !!token,
+  });
 
-  const { data: aiHealth, isLoading: healthLoading } = useQuery(
-    'ai-health',
-    () => apiService.getAIHealth(),
-    {
-      refetchInterval: 120000,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: true,
-      refetchOnMount: false,
-    }
-  );
+  const { data: aiHealth, isLoading: healthLoading } = useQuery({
+    queryKey: ['ai-health'],
+    queryFn: () => apiService.getAIHealth(),
+    refetchInterval: 300000, // 5 minutes instead of 2 minutes
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+    refetchOnMount: false,
+    retry: 3,
+    retryDelay: 5000, // 5 seconds between retries
+    staleTime: 60000, // Consider data stale after 1 minute
+  });
 
-  const { data: crosschain } = useQuery(
-    'crosschain-health',
-    () => evSvc.getCrossChainHealth(),
-    {
-      refetchInterval: 180000,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: true,
-      refetchOnMount: false,
-      enabled: !!token,
-    }
-  );
+  const { data: crosschain } = useQuery({
+    queryKey: ['crosschain-health'],
+    queryFn: () => evSvc.getCrossChainHealth(),
+    refetchInterval: 180000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+    refetchOnMount: false,
+    enabled: !!token,
+  });
 
-  const isInitialLoading = evidenceLoading && healthLoading;
+  const { data: casesData, isLoading: casesLoading } = useQuery({
+    queryKey: ['cases-dashboard'],
+    queryFn: () => caseService.listCases({ page: 1, limit: 100 }),
+    refetchInterval: 60000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+    refetchOnMount: false,
+    enabled: !!token,
+  });
+
+  const { data: recentActivity = [], isLoading: activityLoading } = useQuery({
+    queryKey: ['recent-activity'],
+    queryFn: () => evSvc.getRecentActivity(10),
+    refetchInterval: 60000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+    refetchOnMount: false,
+    enabled: !!token,
+  });
+
+  const isInitialLoading = evidenceLoading && healthLoading && casesLoading;
 
   const evidence = evidenceList?.data || [];
   const totalEvidence = evidenceList?.pagination?.total || 0;
-  const pendingAnalysis = evidence.filter(e => e.status === 'PROCESSING').length;
-  const completedAnalysis = evidence.filter(e => e.status === 'ANALYZED').length;
-
-  const { data: recentActivity = [], isLoading: activityLoading } = useQuery(
-    ['recent-activity'],
-    () => evSvc.getRecentActivity(10),
-    {
-      refetchInterval: 60000,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: true,
-      refetchOnMount: false,
-      enabled: !!token,
-    }
-  );
+  const pendingAnalysis = evidence.filter((e: any) => e.status === 'PROCESSING').length;
+  const completedAnalysis = evidence.filter((e: any) => e.status === 'ANALYZED').length;
+  
+  const cases = casesData?.data || [];
+  const activeCases = cases.filter((c: any) => c.status !== 'CLOSED' && c.status !== 'ARCHIVED').length;
 
   return (
     <div className="space-y-8">
@@ -174,10 +183,10 @@ export const Dashboard: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center space-x-3 p-4 rounded-lg border bg-indigo-50 border-indigo-200">
-              <span className={clsx('inline-block h-2.5 w-2.5 rounded-full', crosschain && Object.values(crosschain.networks).some(n => n.connected) ? 'bg-emerald-500' : 'bg-gray-300')} />
+              <span className={clsx('inline-block h-2.5 w-2.5 rounded-full', crosschain && Object.values(crosschain.networks).some((n: any) => n.connected) ? 'bg-emerald-500' : 'bg-gray-300')} />
               <div>
                 <p className="text-sm text-indigo-800">Cross-Chain Bridge</p>
-                <p className="text-xs text-indigo-700">{crosschain ? Object.entries(crosschain.networks).map(([n, s]) => `${n}:${s.connected ? 'up' : 'down'}`).join(' · ') : 'checking...'}</p>
+                <p className="text-xs text-indigo-700">{crosschain ? Object.entries(crosschain.networks).map(([n, s]: [string, any]) => `${n}:${s.connected ? 'up' : 'down'}`).join(' · ') : 'checking...'}</p>
               </div>
             </div>
             <div className="flex items-center space-x-3 p-4 bg-white rounded-lg border">
@@ -210,7 +219,7 @@ export const Dashboard: React.FC = () => {
         />
         <StatCard
           title="Active Cases"
-          value={Math.floor(totalEvidence / 3)}
+          value={activeCases}
           icon={FileText}
         />
       </div>
@@ -225,7 +234,7 @@ export const Dashboard: React.FC = () => {
             <SkeletonText lines={5} />
           ) : (
             <div className="space-y-4">
-              {recentActivity.map((activity) => (
+              {recentActivity.map((activity: any) => (
                 <ActivityItem key={activity.id} activity={activity} />
               ))}
             </div>

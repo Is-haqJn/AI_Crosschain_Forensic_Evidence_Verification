@@ -151,7 +151,7 @@ export class ConfigManager {
         }
       },
       fileUpload: {
-        maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '104857600'), // 100MB
+        maxFileSize: this.parseByteSize(process.env.MAX_FILE_SIZE, 104857600), // Support human-readable values like 100MB
         allowedMimeTypes: process.env.ALLOWED_MIME_TYPES?.split(',') || [
           'image/jpeg',
           'image/png',
@@ -184,6 +184,38 @@ export class ConfigManager {
         emailNotifications: process.env.EMAIL_NOTIFICATIONS_ENABLED === 'true'
       }
     };
+  }
+
+  /**
+   * Parse human-readable byte sizes like "100MB", "50kb", or plain numbers into bytes.
+   * Falls back to provided default when parsing fails.
+   */
+  private parseByteSize(value?: string, defaultBytes: number = 104857600): number {
+    if (!value) return defaultBytes;
+    const trimmed = value.trim();
+    // If it's just digits, treat as bytes
+    if (/^\d+$/.test(trimmed)) {
+      const n = parseInt(trimmed, 10);
+      return Number.isFinite(n) && n > 0 ? n : defaultBytes;
+    }
+    // Match number with optional unit
+    const match = trimmed.match(/^(\d+(?:\.\d+)?)\s*(b|bytes|kb|mb|gb|tb)?$/i);
+    if (match) {
+      const amount = parseFloat(match[1]);
+      const unit = (match[2] || 'b').toLowerCase();
+      const multipliers: Record<string, number> = {
+        b: 1,
+        bytes: 1,
+        kb: 1024,
+        mb: 1024 * 1024,
+        gb: 1024 * 1024 * 1024,
+        tb: 1024 * 1024 * 1024 * 1024,
+      };
+      const m = multipliers[unit] ?? 1;
+      const bytes = Math.floor(amount * m);
+      return Number.isFinite(bytes) && bytes > 0 ? bytes : defaultBytes;
+    }
+    return defaultBytes;
   }
 
   private generateSecureSecret(): string {

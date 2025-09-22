@@ -1,5 +1,5 @@
 # Multi-stage Docker build for AI Analysis Service
-FROM python:3.13-slim as base
+FROM python:3.13-slim AS base
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -7,31 +7,17 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install system dependencies
+# Install minimal system dependencies
 RUN set -eux; \
     apt-get update; \
-    # Note: libatlas-base-dev is not available on Debian trixie; use libatlas3-base + libopenblas-dev instead
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
       build-essential \
-      libglib2.0-0 \
-      libsm6 \
-      libxext6 \
-      libxrender-dev \
-      libgomp1 \
-      libgtk-3-0 \
-      libgl1 \
-      libavcodec-dev \
-      libavformat-dev \
-      libswscale-dev \
-      libv4l-dev \
-      libxvidcore-dev \
-      libx264-dev \
       libjpeg-dev \
       libpng-dev \
-      libtiff-dev \
-      libopenblas-dev \
-      libatlas3-base \
-      gfortran \
+      libgl1 \
+      libglib2.0-0 \
+      ffmpeg \
+      libsndfile1 \
       wget \
       curl; \
     rm -rf /var/lib/apt/lists/*
@@ -39,10 +25,10 @@ RUN set -eux; \
 # Create app directory
 WORKDIR /app
 
-# Copy requirements first for better caching
-COPY requirements.txt .
+# Copy lightweight requirements first for better caching
+COPY requirements-light.txt requirements.txt
 
-# Install Python dependencies
+# Install Python dependencies (lightweight version)
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code

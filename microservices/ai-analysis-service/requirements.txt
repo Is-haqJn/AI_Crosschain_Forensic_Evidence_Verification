@@ -1,14 +1,15 @@
-# AI Analysis Service Requirements - Updated 2025-01-10
+# AI Analysis Service Requirements - Updated 2025-01-20
 # Latest compatible versions for Python 3.13
 
 # FastAPI and async support
-fastapi==0.115.6
-uvicorn[standard]==0.32.1
+fastapi==0.115.8
+uvicorn[standard]==0.32.4
 python-multipart==0.0.20
 aiofiles==24.1.0
 
 # Database
 asyncpg==0.30.0
+psycopg2-binary==2.9.10
 motor==3.7.1
 pymongo==4.15.0
 redis==6.4.0
@@ -63,6 +64,7 @@ cryptography==44.0.2
 python-jose[cryptography]==3.5.0
 passlib[bcrypt]==1.7.4
 PyJWT==2.9.0
+
 
 # Environment and Configuration
 python-dotenv==1.0.1

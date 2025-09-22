@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { caseService } from '../services/caseService';
 import { toast } from 'react-toastify';
 
@@ -9,21 +9,24 @@ export const CaseDetail: React.FC = () => {
   const queryClient = useQueryClient();
   const [evidenceId, setEvidenceId] = useState('');
 
-  const { data, isLoading, isError } = useQuery(['case', id], () => caseService.getCase(id!), { enabled: Boolean(id), refetchOnWindowFocus: false });
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['case', id],
+    queryFn: () => caseService.getCase(id!),
+    enabled: Boolean(id),
+    refetchOnWindowFocus: false
+  });
 
-  const addEvidenceMutation = useMutation(
-    (vars: { evidenceId: string }) => caseService.addEvidence(id!, vars.evidenceId),
-    {
-      onSuccess: () => {
-        toast.success('Evidence linked');
-        queryClient.invalidateQueries(['case', id]);
-        setEvidenceId('');
-      },
-      onError: (e: any) => {
-        toast.error(e.message || 'Failed');
-      }
+  const addEvidenceMutation = useMutation({
+    mutationFn: (vars: { evidenceId: string }) => caseService.addEvidence(id!, vars.evidenceId),
+    onSuccess: () => {
+      toast.success('Evidence linked');
+      queryClient.invalidateQueries({ queryKey: ['case', id] });
+      setEvidenceId('');
+    },
+    onError: (e: any) => {
+      toast.error(e.message || 'Failed');
     }
-  );
+  });
 
   if (isLoading) return <div className="p-6">Loading case...</div>;
   if (isError || !data?.data) return <div className="p-6 text-red-600">Case not found</div>;
@@ -128,7 +131,7 @@ export const CaseDetail: React.FC = () => {
               </ul>
               <div className="mt-4 flex space-x-2">
                 <input value={evidenceId} onChange={e => setEvidenceId(e.target.value)} placeholder="Evidence ID" className="flex-1 border rounded px-3 py-2" />
-                <button disabled={!evidenceId || addEvidenceMutation.isLoading} onClick={() => addEvidenceMutation.mutate({ evidenceId })} className="px-3 py-2 rounded bg-indigo-600 text-white">Add</button>
+                <button disabled={!evidenceId || addEvidenceMutation.isPending} onClick={() => addEvidenceMutation.mutate({ evidenceId })} className="px-3 py-2 rounded bg-indigo-600 text-white">Add</button>
               </div>
             </div>
           </div>

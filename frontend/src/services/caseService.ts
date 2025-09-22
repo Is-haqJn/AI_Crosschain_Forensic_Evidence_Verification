@@ -1,7 +1,7 @@
 import axios, { AxiosResponse } from 'axios';
 import { ApiResponse } from '../types';
 
-const API_BASE_URL = process.env.REACT_APP_EVIDENCE_SERVICE_URL || 'http://localhost:3001/api/v1';
+const API_BASE_URL = '/api/v1';
 
 class CaseService {
   private api = axios.create({ baseURL: API_BASE_URL, headers: { 'Content-Type': 'application/json' } });
@@ -35,6 +35,19 @@ class CaseService {
   async addEvidence(caseId: string, evidenceId: string): Promise<ApiResponse<any>> {
     const res: AxiosResponse<ApiResponse<any>> = await this.api.post(`/cases/${caseId}/evidence`, { evidenceId });
     return res.data;
+  }
+
+  async updateCaseStatus(caseId: string, status: string): Promise<ApiResponse<any>> {
+    const res: AxiosResponse<ApiResponse<any>> = await this.api.patch(`/cases/${caseId}`, { status });
+    return res.data;
+  }
+
+  async closeCase(caseId: string): Promise<ApiResponse<any>> {
+    return this.updateCaseStatus(caseId, 'CLOSED');
+  }
+
+  async archiveCase(caseId: string): Promise<ApiResponse<any>> {
+    return this.updateCaseStatus(caseId, 'ARCHIVED');
   }
 }
 

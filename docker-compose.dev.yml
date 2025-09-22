@@ -14,13 +14,13 @@ services:
       - NODE_ENV=development
       - PORT=3001
       # Use Docker network hostnames to talk to infra containers
-      - DATABASE_URL=postgresql://forensic_user:password@postgres:5432/forensic_db
-      - MONGODB_URI=mongodb://admin:password@mongodb:27017/evidence_db?authSource=admin
-      - REDIS_URL=redis://redis:6379
-      - RABBITMQ_URL=amqp://admin:password@rabbitmq:5672
-      - IPFS_HOST=ipfs
-      - IPFS_PORT=5001
-      - IPFS_PROTOCOL=http
+      - DATABASE_URL=${DATABASE_URL}
+      - MONGODB_URI=${MONGODB_URI}
+      - REDIS_URL=${REDIS_URL}
+      - RABBITMQ_URL=${RABBITMQ_URL}
+      - IPFS_HOST=${IPFS_HOST}
+      - IPFS_PORT=${IPFS_PORT}
+      - IPFS_PROTOCOL=${IPFS_PROTOCOL}
       - SEPOLIA_RPC_URL=${SEPOLIA_RPC_URL}
       - AMOY_RPC_URL=${AMOY_RPC_URL}
       - CONTRACT_ADDRESS_SEPOLIA=${CONTRACT_ADDRESS_SEPOLIA}
@@ -65,21 +65,14 @@ services:
       context: ./microservices/ai-analysis-service
       dockerfile: Dockerfile
     env_file:
-      - .env
+      - ./microservices/ai-analysis-service/.env
     ports:
       - "8001:8001"
     environment:
       - ENVIRONMENT=development
       - HOST=0.0.0.0
       - PORT=8001
-      - JWT_SECRET=${JWT_SECRET}
-      - DATABASE_URL=postgresql://forensic_user:password@postgres:5432/forensic_db
-      - MONGODB_URI=mongodb://admin:password@mongodb:27017/ai_analysis_db?authSource=admin
-      - REDIS_URL=redis://redis:6379
-      - RABBITMQ_URL=amqp://admin:password@rabbitmq:5672
-      - IPFS_HOST=ipfs
-      - IPFS_PORT=5001
-      - CORS_ORIGINS=${CORS_ORIGIN}
+      - EVIDENCE_SERVICE_URL=http://evidence-service:3001
     depends_on:
       - postgres
       - mongodb
@@ -99,12 +92,12 @@ services:
       - "3000:3000"
     environment:
       # CRA reads these at dev server startup
-      - REACT_APP_EVIDENCE_SERVICE_URL=http://localhost:3001/api/v1
-      - REACT_APP_AI_SERVICE_URL=http://localhost:8001
-      - REACT_APP_SUBMIT_NETWORK=sepolia
-      - REACT_APP_VERIFY_NETWORK=amoy
-      - CHOKIDAR_USEPOLLING=true
-      - WATCHPACK_POLLING=true
+      - REACT_APP_EVIDENCE_SERVICE_URL=${REACT_APP_EVIDENCE_SERVICE_URL}
+      - REACT_APP_AI_SERVICE_URL=${REACT_APP_AI_SERVICE_URL}
+      - REACT_APP_SUBMIT_NETWORK=${REACT_APP_SUBMIT_NETWORK}
+      - REACT_APP_VERIFY_NETWORK=${REACT_APP_VERIFY_NETWORK}
+      - CHOKIDAR_USEPOLLING=${CHOKIDAR_USEPOLLING}
+      - WATCHPACK_POLLING=${WATCHPACK_POLLING}
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -144,7 +137,7 @@ services:
     environment:
       - POSTGRES_DB=forensic_db
       - POSTGRES_USER=forensic_user
-      - POSTGRES_PASSWORD=password
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
@@ -157,8 +150,8 @@ services:
   mongodb:
     image: mongo:7
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=admin
-      - MONGO_INITDB_ROOT_PASSWORD=password
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
       - MONGO_INITDB_DATABASE=evidence_db
     ports:
       - "27017:27017"
@@ -171,25 +164,29 @@ services:
   # Redis
   redis:
     image: redis:7-alpine
+    command: redis-server /usr/local/etc/redis/redis.conf
     ports:
       - "6379:6379"
     volumes:
       - redis-data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
       - forensic-network
     restart: unless-stopped
 
   # RabbitMQ
   rabbitmq:
-    image: rabbitmq:3-management-alpine
+    image: rabbitmq:3.13-management-alpine
     environment:
-      - RABBITMQ_DEFAULT_USER=admin
-      - RABBITMQ_DEFAULT_PASS=password
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+      - RABBITMQ_CONFIG_FILE=/etc/rabbitmq/rabbitmq.conf
     ports:
       - "5672:5672"
       - "15672:15672"
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
     networks:
       - forensic-network
     restart: unless-stopped

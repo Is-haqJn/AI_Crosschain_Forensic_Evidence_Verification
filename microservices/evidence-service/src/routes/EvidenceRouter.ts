@@ -75,7 +75,7 @@ export class EvidenceRouter {
     this.router.post(
       '/:id/analysis',
       this.authMiddleware.authenticate.bind(this.authMiddleware),
-      this.authMiddleware.authorize(['validator', 'admin']),
+      this.authMiddleware.authorize(['validator', 'admin', 'service']),
       this.validationMiddleware.validateAnalysis,
       this.errorHandler.asyncHandler(this.evidenceController.addAIAnalysis.bind(this.evidenceController))
     );

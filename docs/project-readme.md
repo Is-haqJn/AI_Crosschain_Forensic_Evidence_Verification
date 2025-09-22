@@ -196,6 +196,14 @@ graph TD
 - Cross-service communication
 - Blockchain interaction tests
 
+### AI Analysis Integration Notes (2025-09-21)
+
+- Fixed a race condition between status completion and results availability in the AI service. Results are now stored before status flips to `completed` and serialized safely using Pydantic `model_dump()/dict()`.
+- Evidence service now maps 404 from AI results to 404 (not 500) so the frontend can continue polling gracefully.
+- To verify locally:
+  - Rebuild AI and evidence services: `docker compose -f docker-compose.dev.yml up -d --build ai-analysis-service evidence-service`
+  - Submit analysis via `/api/v1/evidence/{id}/ai-analysis` and poll `/status`; when `completed`, `/results` should return JSON.
+
 ### E2E Tests
 - User journey testing with Cypress
 - Cross-chain transaction testing

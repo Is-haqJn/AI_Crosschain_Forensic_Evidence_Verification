@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     QUEUE_EVIDENCE_ANALYSIS: str = "ai.analysis"
     QUEUE_RESULTS: str = "ai.results"
     EXCHANGE_NAME: str = "evidence.exchange"
+
+    # Evidence Service Callback URL (inside Docker network)
+    EVIDENCE_SERVICE_URL: str = os.getenv("EVIDENCE_SERVICE_URL", "http://evidence-service:3001")
     
     # IPFS Configuration
     IPFS_HOST: str = os.getenv("IPFS_HOST", "localhost")
@@ -170,6 +173,7 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = True
+        extra = "ignore"  # Ignore extra fields instead of raising errors
 
 
 @lru_cache()

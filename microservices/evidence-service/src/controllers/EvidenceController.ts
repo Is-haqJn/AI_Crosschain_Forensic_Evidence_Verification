@@ -209,15 +209,16 @@ export class EvidenceController {
   public async addAIAnalysis(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;
-      const { analysisResults } = req.body;
+      const { analysisResults, results } = req.body as any;
 
       if (!req.user) {
         throw new AppError('User not authenticated', 401);
       }
 
+      const payload = analysisResults || results || {};
       const evidence = await this.evidenceService.addAIAnalysis(
         id,
-        analysisResults,
+        payload,
         req.user.id
       );
 
@@ -432,28 +433,53 @@ export class EvidenceController {
         throw new AppError('User not authenticated', 401);
       }
 
-      // Fire-and-forget to avoid long client waits. We'll persist analysis once created.
-      setImmediate(async () => {
-        try {
-          const result = await this.evidenceService.submitForAIAnalysis(
-            id,
-            analysisType,
-            priority || 5,
-            req.user!.id
-          );
-          this.logger.info('Evidence submitted for AI analysis (bg)', {
-            evidenceId: id,
-            analysisType,
-            priority,
-            userId: req.user!.id,
-            analysisId: result?.analysisId
-          });
-        } catch (err) {
-          this.logger.error('Background AI analysis submission failed', err);
-        }
+      this.logger.info('Starting AI analysis submission', {
+        evidenceId: id,
+        analysisType,
+        priority: priority || 5,
+        userId: req.user.id
       });
 
-      res.status(202).json({ success: true, message: 'Analysis started' });
+      // Process analysis synchronously to ensure proper error handling
+      try {
+        const result = await this.evidenceService.submitForAIAnalysis(
+          id,
+          analysisType,
+          priority || 5,
+          req.user.id
+        );
+        
+        this.logger.info('Evidence submitted for AI analysis successfully', {
+          evidenceId: id,
+          analysisType,
+          priority: priority || 5,
+          userId: req.user.id,
+          analysisId: result?.analysisId
+        });
+
+        res.status(202).json({ 
+          success: true, 
+          message: 'Analysis started',
+          data: {
+            analysisId: result.analysisId,
+            status: result.status
+          }
+        });
+      } catch (analysisError) {
+        this.logger.error('AI analysis submission failed', {
+          evidenceId: id,
+          analysisType,
+          error: analysisError instanceof Error ? analysisError.message : String(analysisError),
+          stack: analysisError instanceof Error ? analysisError.stack : undefined
+        });
+        
+        // Return error to client instead of silent failure
+        res.status(500).json({
+          success: false,
+          message: 'Failed to start AI analysis',
+          error: analysisError instanceof Error ? analysisError.message : 'Unknown error'
+        });
+      }
     } catch (error) {
       next(error);
     }

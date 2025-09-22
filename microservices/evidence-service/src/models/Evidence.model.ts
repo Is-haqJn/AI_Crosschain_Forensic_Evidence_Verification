@@ -30,6 +30,7 @@ export interface IEvidence extends Document {
   evidenceId: string;
   ipfsHash: string;
   dataHash: string;
+  fileContent?: Buffer;
   metadata: {
     filename: string;
     filesize: number;
@@ -78,6 +79,10 @@ export interface IEvidence extends Document {
     confidence: number;
     anomaliesDetected: boolean;
     ipfsHash?: string;
+    runBy?: { userId: string; email?: string; name?: string; organization?: string; role?: string };
+    model?: { name?: string; version?: string };
+    processingTime?: number;
+    params?: any;
   };
   blockchainData?: {
     transactionHash: string;
@@ -131,6 +136,10 @@ const EvidenceSchema = new Schema<IEvidence>({
     required: true, 
     unique: true, 
     index: true 
+  },
+  fileContent: {
+    type: Buffer,
+    required: false
   },
   metadata: {
     filename: { 
@@ -238,7 +247,20 @@ const EvidenceSchema = new Schema<IEvidence>({
     results: Schema.Types.Mixed,
     confidence: Number,
     anomaliesDetected: Boolean,
-    ipfsHash: String
+    ipfsHash: String,
+    runBy: {
+      userId: String,
+      email: String,
+      name: String,
+      organization: String,
+      role: String
+    },
+    model: {
+      name: String,
+      version: String
+    },
+    processingTime: Number,
+    params: Schema.Types.Mixed
   },
   blockchainData: {
     transactionHash: String,

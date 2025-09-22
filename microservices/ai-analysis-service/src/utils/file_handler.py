@@ -130,22 +130,61 @@ class FileHandler:
             content = await file.read(1024)
             await file.seek(0)  # Reset file pointer
             
-            # Detect MIME type
+            # Detect MIME type from filename
             mime_type, _ = mimetypes.guess_type(file.filename or "")
+            
+            # Get file extension as fallback
+            file_ext = None
+            if file.filename:
+                file_ext = Path(file.filename).suffix.lower().lstrip('.')
             
             # Expected MIME types for each analysis type
             expected_mimes = {
                 "image": ["image/jpeg", "image/png", "image/gif", "image/bmp", "image/tiff"],
                 "video": ["video/mp4", "video/avi", "video/quicktime", "video/x-msvideo"],
-                "document": ["application/pdf", "application/msword", "text/plain"],
+                "document": [
+                    "application/pdf", 
+                    "application/msword", 
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # .docx
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # .xlsx
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",  # .pptx
+                    "text/plain",
+                    "text/html"
+                ],
                 "audio": ["audio/mpeg", "audio/wav", "audio/mp4", "audio/flac"]
             }
             
-            expected = expected_mimes.get(analysis_type, [])
-            if expected and mime_type not in expected:
-                logger.warning(f"MIME type {mime_type} not expected for {analysis_type}")
-                return False
+            # Expected file extensions as fallback
+            expected_extensions = {
+                "image": ["jpg", "jpeg", "png", "gif", "bmp", "tiff"],
+                "video": ["mp4", "avi", "mov", "wmv", "flv", "mkv"],
+                "document": ["pdf", "doc", "docx", "txt", "rtf", "xlsx", "pptx"],
+                "audio": ["mp3", "wav", "m4a", "flac", "ogg"]
+            }
             
+            expected_mime_types = expected_mimes.get(analysis_type, [])
+            expected_ext_list = expected_extensions.get(analysis_type, [])
+            
+            # If MIME type is None or not detected, use file extension validation
+            if mime_type is None:
+                if file_ext and file_ext in expected_ext_list:
+                    logger.info(f"MIME type not detected, but file extension '{file_ext}' is valid for {analysis_type}")
+                    return True
+                else:
+                    logger.warning(f"MIME type None and file extension '{file_ext}' not valid for {analysis_type}")
+                    return False
+            
+            # If MIME type is detected, validate it
+            if expected_mime_types and mime_type not in expected_mime_types:
+                # Check if file extension is valid as fallback
+                if file_ext and file_ext in expected_ext_list:
+                    logger.info(f"MIME type {mime_type} not expected but file extension '{file_ext}' is valid for {analysis_type}")
+                    return True
+                else:
+                    logger.warning(f"MIME type {mime_type} not expected for {analysis_type}")
+                    return False
+            
+            logger.debug(f"File content validation passed: MIME type {mime_type}, extension {file_ext}")
             return True
             
         except Exception as e:

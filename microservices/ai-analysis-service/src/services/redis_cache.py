@@ -21,7 +21,53 @@ class RedisCacheService:
     def __init__(self):
         self.redis_client = None
         self._connected = False
-    
+        self._initializing = False
+
+    @property
+    def is_ready(self) -> bool:
+        """Check if Redis is ready, initializing if necessary"""
+        if not self._connected and not self._initializing:
+            try:
+                self._initialize_sync()
+            except Exception as e:
+                logger.warning(f"Auto-initialization failed: {e}")
+        return self._connected
+
+    def _initialize_sync(self):
+        """Initialize Redis synchronously"""
+        if self._initializing:
+            return
+
+        self._initializing = True
+        try:
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Running in an async context, schedule initialization
+                    loop.create_task(self._auto_initialize())
+                else:
+                    # Not in async context, initialize synchronously
+                    loop.run_until_complete(self._auto_initialize())
+            except RuntimeError:
+                # No event loop, create one for initialization
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(self._auto_initialize())
+        finally:
+            self._initializing = False
+
+    async def _auto_initialize(self):
+        """Auto-initialize the service"""
+        if self._initializing:
+            return
+
+        self._initializing = True
+        try:
+            await self.initialize()
+        finally:
+            self._initializing = False
+
     async def initialize(self):
         """Initialize Redis connection"""
         try:

@@ -1,0 +1,55 @@
+# AI Analysis Service Requirements - Lightweight Version
+# Optimized for faster builds and development
+
+# FastAPI and async support
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20
+aiofiles==24.1.0
+
+# Database (minimal) - Using both async and sync drivers for real implementation
+asyncpg==0.30.0
+psycopg2-binary==2.9.10
+greenlet==3.1.1
+motor==3.7.1
+redis==6.4.0
+sqlalchemy==2.0.36
+
+# Message Queue
+aio-pika==9.5.7
+
+# Basic ML (lightweight but functional)
+numpy==2.2.5
+Pillow==11.3.0
+scikit-learn==1.5.2
+opencv-python-headless==4.12.0.88
+imagehash==4.3.2
+
+# Document Analysis (essential)
+PyPDF2==3.0.1
+python-docx==1.1.2
+openpyxl==3.1.5
+
+# Video Analysis (minimal)
+moviepy==1.0.3
+
+# Audio Analysis (minimal)
+librosa==0.10.2
+
+# Security and Cryptography
+cryptography==44.0.2
+PyJWT==2.9.0
+
+# Environment and Configuration
+python-dotenv==1.0.1
+pydantic==2.11.3
+pydantic-settings==2.9.1
+
+# Logging and Monitoring
+loguru==0.7.3
+prometheus-client==0.22.1
+psutil==7.0.0
+
+# Utils
+httpx==0.28.1
+python-dateutil==2.9.0

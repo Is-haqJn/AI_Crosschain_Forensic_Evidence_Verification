@@ -145,6 +145,8 @@ export class CrossChainService {
   /** Resolve ABI path from mounted artifacts */
   private resolveAbiPath(): string | null {
     const candidates = [
+      // Assets directory in the service
+      path.join(__dirname, '../assets/contracts/ForensicEvidenceRegistry.json'),
       // When running from dist, __dirname is /app/dist/services
       path.join(__dirname, '../../../smart-contracts/artifacts/contracts/ForensicEvidenceRegistry.sol/ForensicEvidenceRegistry.json'),
       // In case relative resolution changes
@@ -159,26 +161,45 @@ export class CrossChainService {
     return null;
   }
 
-  /** Resolve contract address from env or deployments JSON */
+  /** Resolve contract address from env or deployments JSON (normalize to EIP-55) */
   private resolveContractAddress(network: string, envAddress?: string): string | null {
-    if (envAddress && /^0x[a-fA-F0-9]{40}$/.test(envAddress)) return envAddress;
+    const normalize = (addr?: string): string | null => {
+      if (!addr) return null;
+      try {
+        // Returns EIP-55 checksummed address if valid
+        return ethers.getAddress(addr);
+      } catch {
+        // Fallback: allow all-lowercase hex
+        const lower = addr.toLowerCase();
+        return /^0x[0-9a-f]{40}$/.test(lower) ? lower : null;
+      }
+    };
+
+    const fromEnv = normalize(envAddress);
+    if (fromEnv) {
+      if (fromEnv !== envAddress) {
+        this.logger.warn('Normalized non-checksummed contract address from env', { network, env: envAddress, normalized: fromEnv });
+      }
+      return fromEnv;
+    }
+
     try {
       const deploymentsPath = path.join(__dirname, '../../../smart-contracts/deployments', `${network}.json`);
       if (fs.existsSync(deploymentsPath)) {
         const j = JSON.parse(fs.readFileSync(deploymentsPath, 'utf8'));
-        const addr = j?.contracts?.evidenceRegistry?.address;
-        if (addr && /^0x[a-fA-F0-9]{40}$/.test(addr)) return addr;
+        const addr = normalize(j?.contracts?.evidenceRegistry?.address);
+        if (addr) return addr;
       }
       const altPath = `/smart-contracts/deployments/${network}.json`;
       if (fs.existsSync(altPath)) {
         const j = JSON.parse(fs.readFileSync(altPath, 'utf8'));
-        const addr = j?.contracts?.evidenceRegistry?.address;
-        if (addr && /^0x[a-fA-F0-9]{40}$/.test(addr)) return addr;
+        const addr = normalize(j?.contracts?.evidenceRegistry?.address);
+        if (addr) return addr;
       }
     } catch (e) {
       this.logger.error(`Failed to resolve contract address for ${network}`, e);
     }
-    this.logger.error(`Contract address not set for ${network}`);
+    this.logger.error(`Contract address not set or invalid for ${network}`);
     return null;
   }
 

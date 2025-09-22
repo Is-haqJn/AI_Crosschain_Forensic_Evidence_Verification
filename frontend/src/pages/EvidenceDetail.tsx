@@ -1,6 +1,6 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { evidenceService } from '../services/evidenceService';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { toast } from 'react-toastify';
@@ -9,42 +9,36 @@ export const EvidenceDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
 
-  const { data, isLoading, isError, error } = useQuery(
-    ['evidence', id],
-    () => evidenceService.getEvidence(id!),
-    {
-      enabled: Boolean(id),
-      refetchOnWindowFocus: false,
-      refetchOnMount: false,
-      staleTime: 60_000,
-    }
-  );
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ['evidence', id],
+    queryFn: () => evidenceService.getEvidence(id!),
+    enabled: Boolean(id),
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    staleTime: 60_000,
+  });
 
-  const submitMutation = useMutation(
-    (vars: { network: string }) => evidenceService.submitToBlockchain(id!, vars.network),
-    {
-      onSuccess: () => {
-        toast.success('Submitted to blockchain');
-        queryClient.invalidateQueries(['evidence', id]);
-      },
-      onError: (err: any) => {
-        toast.error(err.message || 'Submission failed');
-      },
-    }
-  );
+  const submitMutation = useMutation({
+    mutationFn: (vars: { network: string }) => evidenceService.submitToBlockchain(id!, vars.network),
+    onSuccess: () => {
+      toast.success('Submitted to blockchain');
+      queryClient.invalidateQueries({ queryKey: ['evidence', id] });
+    },
+    onError: (err: any) => {
+      toast.error(err.message || 'Submission failed');
+    },
+  });
 
-  const verifyMutation = useMutation(
-    (vars: { network: string }) => evidenceService.verifyOnBlockchain(id!, vars.network),
-    {
-      onSuccess: (res) => {
-        const v = res.data;
-        toast.info(v?.verified ? 'Evidence verified on-chain' : 'Evidence not found on-chain');
-      },
-      onError: (err: any) => {
-        toast.error(err.message || 'Verification failed');
-      },
-    }
-  );
+  const verifyMutation = useMutation({
+    mutationFn: (vars: { network: string }) => evidenceService.verifyOnBlockchain(id!, vars.network),
+    onSuccess: (res: any) => {
+      const v = res.data;
+      toast.info(v?.verified ? 'Evidence verified on-chain' : 'Evidence not found on-chain');
+    },
+    onError: (err: any) => {
+      toast.error(err.message || 'Verification failed');
+    },
+  });
 
   if (isLoading) {
     return (
@@ -102,14 +96,14 @@ export const EvidenceDetail: React.FC = () => {
             </div>
             <div className="space-x-2">
               <button
-                disabled={onChain || submitMutation.isLoading}
+                disabled={onChain || submitMutation.isPending}
                 onClick={() => submitMutation.mutate({ network: process.env.REACT_APP_SUBMIT_NETWORK || 'sepolia' })}
                 className={`px-3 py-1 rounded-md text-white ${onChain ? 'bg-gray-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
               >
                 Submit
               </button>
               <button
-                disabled={verifyMutation.isLoading}
+                disabled={verifyMutation.isPending}
                 onClick={() => verifyMutation.mutate({ network: process.env.REACT_APP_VERIFY_NETWORK || 'amoy' })}
                 className="px-3 py-1 rounded-md text-indigo-700 border border-indigo-200 hover:bg-indigo-50"
               >

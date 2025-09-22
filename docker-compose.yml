@@ -33,24 +33,29 @@ services:
   redis:
     image: redis:7-alpine
     container_name: forensic-redis
-    command: redis-server --requirepass redis_pass
+    command: redis-server /usr/local/etc/redis/redis.conf
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
       - forensic-network
 
   # Message Queue
   rabbitmq:
-    image: rabbitmq:3.12-management-alpine
+    image: rabbitmq:3.13-management-alpine
     container_name: forensic-rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: rabbitmq_user
-      RABBITMQ_DEFAULT_PASS: rabbitmq_pass
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+      RABBITMQ_CONFIG_FILE: /etc/rabbitmq/rabbitmq.conf
     ports:
       - "5672:5672"
       - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
     networks:
       - forensic-network
 
@@ -77,6 +82,7 @@ networks:
 volumes:
   postgres_data:
   mongodb_data:
+  redis_data:
   rabbitmq_data:
   ipfs_staging:
   ipfs_data:

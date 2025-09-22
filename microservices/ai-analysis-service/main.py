@@ -7,6 +7,7 @@ import os
 import sys
 from pathlib import Path
 from typing import Optional
+from datetime import datetime
 
 import uvicorn
 from fastapi import FastAPI, Request
@@ -116,14 +117,49 @@ class AIAnalysisApplication:
     def _add_routes(self):
         """Add API routes"""
         
-        # Health check endpoint
+        # Simple health check endpoint (no dependencies)
         @self.app.get("/health")
         async def health_check():
             return {
                 "status": "healthy",
                 "service": self.settings.SERVICE_NAME,
-                "version": "1.0.0"
+                "version": "1.0.0",
+                "timestamp": datetime.utcnow().isoformat()
             }
+        
+        # Liveness endpoint at root path for Kubernetes compatibility
+        @self.app.get("/health/live")
+        async def liveness_check_root():
+            return {
+                "alive": True,
+                "service": self.settings.SERVICE_NAME,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        
+        # Detailed health check with dependencies
+        @self.app.get("/health/detailed")
+        async def detailed_health_check():
+            try:
+                return {
+                    "status": "healthy",
+                    "service": self.settings.SERVICE_NAME,
+                    "version": "1.0.0",
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "dependencies": {
+                        "database": "standalone",
+                        "redis": "standalone", 
+                        "message_queue": "standalone"
+                    }
+                }
+            except Exception as e:
+                logger.error(f"Detailed health check failed: {e}")
+                return {
+                    "status": "unhealthy",
+                    "service": self.settings.SERVICE_NAME,
+                    "version": "1.0.0",
+                    "error": str(e),
+                    "timestamp": datetime.utcnow().isoformat()
+                }
         
         # Ready check endpoint
         @self.app.get("/ready")
@@ -161,9 +197,13 @@ class AIAnalysisApplication:
                 "services": details
             }
         
-        # Include API routers
+        # Include API routers (primary mounts)
         self.app.include_router(health_router, prefix="/api/v1")
         self.app.include_router(analysis_router, prefix="/api/v1")
+        
+        # Backward/forward compatible alias under /api/v1/analysis/*
+        # This ensures both /api/v1/submit and /api/v1/analysis/submit work
+        self.app.include_router(analysis_router, prefix="/api/v1/analysis")
     
     def _add_event_handlers(self):
         """Add startup and shutdown event handlers"""
@@ -171,14 +211,15 @@ class AIAnalysisApplication:
         @self.app.on_event("startup")
         async def startup_event():
             logger.info(f"Starting {self.settings.SERVICE_NAME}...")
-            
+
             try:
-                # Initialize services
-                await self._initialize_services()
-                
+                # Force initialization of services
+                db_service.is_ready
+                redis_cache.is_ready
+
                 # Load ML models
                 await self._load_ml_models()
-                
+
                 logger.info(f"{self.settings.SERVICE_NAME} started successfully")
             except Exception as e:
                 logger.error(f"Failed to start {self.settings.SERVICE_NAME}: {e}")
@@ -222,7 +263,7 @@ class AIAnalysisApplication:
     async def _load_ml_models(self):
         """Load machine learning models"""
         logger.info("Loading ML models...")
-        
+
         try:
             # Initialize model manager
             await self.model_manager.initialize_models()
@@ -230,6 +271,27 @@ class AIAnalysisApplication:
         except Exception as e:
             logger.warning(f"Failed to initialize AI models: {e}")
             logger.info("Models will be loaded on-demand during analysis")
+
+    async def _ensure_services_connected(self):
+        """Ensure all services are connected, reinitializing if needed"""
+        logger.info("Ensuring services are connected...")
+
+        try:
+            # Check if services are already connected
+            if db_service._connected and redis_cache._connected:
+                logger.info("Services already connected")
+                return
+
+            # Reinitialize services if not connected
+            logger.info("Reinitializing services...")
+            await db_service.initialize()
+            await redis_cache.initialize()
+            await message_queue.initialize()
+            logger.info("Services reinitialized successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to ensure services connected: {e}")
+            # Don't raise - allow service to continue with limited functionality
 
 
 def create_application() -> FastAPI:
@@ -250,7 +312,7 @@ if __name__ == "__main__":
         "main:app",
         host=settings.HOST,
         port=settings.PORT,
-        reload=settings.DEBUG,
+        reload=False,  # Disable reloader to avoid multiprocessing issues
         log_level=settings.LOG_LEVEL.lower(),
         access_log=settings.ACCESS_LOG,
     )

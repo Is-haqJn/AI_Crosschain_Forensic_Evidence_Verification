@@ -115,23 +115,63 @@ export class IPFSManager {
    * Download file from IPFS
    */
   public async downloadFile(hash: string): Promise<Buffer> {
+    this.logger.info('Starting IPFS file download', {
+      hash,
+      isConnected: this.isConnected,
+      hasFs: !!this.fs
+    });
+
     if (!this.isConnected || !this.fs) {
       throw new Error('IPFS not connected');
     }
 
     try {
-      const chunks: Uint8Array[] = [];
-      for await (const chunk of this.fs.cat(hash)) {
-        chunks.push(chunk);
-      }
+      this.logger.info('Attempting to download file from IPFS', { hash });
       
-      const buffer = Buffer.concat(chunks);
-      this.logger.info(`File downloaded from IPFS: ${hash}`);
+      // Add timeout to prevent hanging
+      const downloadPromise = this.downloadFileWithTimeout(hash);
+      const timeoutPromise = new Promise<Buffer>((_, reject) => {
+        setTimeout(() => reject(new Error('IPFS download timeout after 30 seconds')), 30000);
+      });
+      
+      const buffer = await Promise.race([downloadPromise, timeoutPromise]);
+      
+      this.logger.info('File downloaded from IPFS successfully', {
+        hash,
+        fileSize: buffer.length
+      });
       return buffer;
     } catch (error) {
-      this.logger.error('Error downloading file from IPFS:', error);
+      this.logger.error('Error downloading file from IPFS', {
+        hash,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
       throw error;
     }
+  }
+
+  /**
+   * Download file with timeout handling
+   */
+  private async downloadFileWithTimeout(hash: string): Promise<Buffer> {
+    const chunks: Uint8Array[] = [];
+    let chunkCount = 0;
+    
+    for await (const chunk of this.fs.cat(hash)) {
+      chunks.push(chunk);
+      chunkCount++;
+      
+      if (chunkCount % 10 === 0) {
+        this.logger.debug('Downloading file chunk', { 
+          hash, 
+          chunkCount, 
+          currentChunkSize: chunk.length 
+        });
+      }
+    }
+    
+    return Buffer.concat(chunks);
   }
 
   /**

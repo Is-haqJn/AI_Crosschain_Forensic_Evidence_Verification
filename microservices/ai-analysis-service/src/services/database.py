@@ -5,11 +5,12 @@ Handles PostgreSQL and MongoDB connections and operations
 
 import asyncio
 from typing import Dict, Any, Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta
 import asyncpg
 from motor.motor_asyncio import AsyncIOMotorClient
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
 from loguru import logger
 
 from ..config import get_settings
@@ -26,21 +27,94 @@ class DatabaseService:
         self.mongodb_client = None
         self.mongodb_db = None
         self._connected = False
-    
+        self._initializing = False
+
+    @property
+    def is_ready(self) -> bool:
+        """Check if database is ready, initializing if necessary"""
+        if not self._connected and not self._initializing:
+            try:
+                self._initialize_sync()
+            except Exception as e:
+                logger.warning(f"Auto-initialization failed: {e}")
+        return self._connected
+
+    def _initialize_sync(self):
+        """Initialize database synchronously"""
+        if self._initializing:
+            return
+
+        self._initializing = True
+        try:
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Running in an async context, schedule initialization
+                    loop.create_task(self._auto_initialize())
+                else:
+                    # Not in async context, initialize synchronously
+                    loop.run_until_complete(self._auto_initialize())
+            except RuntimeError:
+                # No event loop, create one for initialization
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(self._auto_initialize())
+        finally:
+            self._initializing = False
+
+    async def _auto_initialize(self):
+        """Auto-initialize the service"""
+        if self._initializing:
+            return
+
+        self._initializing = True
+        try:
+            await self.initialize()
+        finally:
+            self._initializing = False
+
     async def initialize(self):
         """Initialize database connections"""
         try:
-            await self._initialize_postgres()
-            await self._initialize_mongodb()
-            self._connected = True
-            logger.info("Database connections initialized successfully")
+            postgres_success = False
+            mongodb_success = False
+            
+            # Try to initialize PostgreSQL
+            try:
+                await self._initialize_postgres()
+                postgres_success = True
+            except Exception as e:
+                logger.warning(f"PostgreSQL initialization failed: {e}")
+            
+            # Try to initialize MongoDB
+            try:
+                await self._initialize_mongodb()
+                mongodb_success = True
+            except Exception as e:
+                logger.warning(f"MongoDB initialization failed: {e}")
+            
+            # Set connected if at least one database is available
+            self._connected = postgres_success or mongodb_success
+            
+            if self._connected:
+                logger.info(f"Database connections initialized (PostgreSQL: {postgres_success}, MongoDB: {mongodb_success})")
+            else:
+                logger.warning("No database connections available - operating in standalone mode")
+                
         except Exception as e:
-            logger.error(f"Failed to initialize database connections: {e}")
-            raise
+            logger.error(f"Critical error during database initialization: {e}")
+            # Don't raise the exception - allow service to continue without databases
+            self._connected = False
     
     async def _initialize_postgres(self):
         """Initialize PostgreSQL connection"""
         try:
+            # Check if DATABASE_URL is configured
+            if not settings.DATABASE_URL or settings.DATABASE_URL == "":
+                logger.warning("DATABASE_URL not configured, skipping PostgreSQL initialization")
+                return
+            
             # Create async engine
             self.postgres_engine = create_async_engine(
                 settings.DATABASE_URL,
@@ -59,7 +133,7 @@ class DatabaseService:
             
             # Test connection
             async with self.postgres_engine.begin() as conn:
-                await conn.execute("SELECT 1")
+                await conn.execute(text("SELECT 1"))
             
             logger.info("PostgreSQL connection established")
             
@@ -70,6 +144,11 @@ class DatabaseService:
     async def _initialize_mongodb(self):
         """Initialize MongoDB connection"""
         try:
+            # Check if MONGODB_URI is configured
+            if not settings.MONGODB_URI or settings.MONGODB_URI == "":
+                logger.warning("MONGODB_URI not configured, skipping MongoDB initialization")
+                return
+            
             self.mongodb_client = AsyncIOMotorClient(settings.MONGODB_URI)
             self.mongodb_db = self.mongodb_client.get_default_database()
             

@@ -23,6 +23,11 @@ export class FileUploadMiddleware {
    */
   private configureMulter(): multer.Multer {
     const fileUploadConfig = this.config.get<any>('fileUpload');
+    
+    // Debug logging
+    console.log('File upload config:', fileUploadConfig);
+    console.log('Max file size:', fileUploadConfig.maxFileSize);
+    console.log('Environment MAX_FILE_SIZE:', process.env.MAX_FILE_SIZE);
 
     const storage = multer.memoryStorage();
 

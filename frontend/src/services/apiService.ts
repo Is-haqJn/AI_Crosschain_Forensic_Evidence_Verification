@@ -9,7 +9,7 @@ class ApiService {
   constructor() {
     // Evidence Service API
     this.evidenceApi = axios.create({
-      baseURL: process.env.REACT_APP_EVIDENCE_SERVICE_URL || 'http://localhost:3001/api/v1',
+      baseURL: '/api/v1',
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',

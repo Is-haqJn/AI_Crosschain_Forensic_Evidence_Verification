@@ -11,8 +11,17 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 import numpy as np
 from PIL import Image, ExifTags
-import cv2
-import imagehash
+
+# Lazy/defensive imports for heavy optional deps
+try:  # OpenCV may be unavailable at runtime without system libs
+    import cv2  # type: ignore
+except Exception:  # pragma: no cover
+    cv2 = None  # type: ignore
+
+try:  # imagehash is optional; fall back gracefully
+    import imagehash  # type: ignore
+except Exception:  # pragma: no cover
+    imagehash = None  # type: ignore
 from loguru import logger
 
 from ..schemas.analysis_schemas import (
@@ -117,10 +126,12 @@ class ImageProcessor:
             if pil_image.mode != 'RGB':
                 pil_image = pil_image.convert('RGB')
             
-            # Convert to OpenCV format
-            image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
-            
-            return image
+            # Convert to OpenCV format if available, otherwise keep as numpy RGB
+            if cv2 is not None:  # type: ignore
+                image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)  # type: ignore
+                return image
+            else:
+                return np.array(pil_image)
             
         except Exception as e:
             logger.error(f"Failed to load image {file_path}: {e}")
@@ -168,12 +179,21 @@ class ImageProcessor:
     async def _fallback_manipulation_detection(self, image: np.ndarray) -> ImageManipulationResult:
         """Fallback manipulation detection using basic techniques"""
         try:
-            # Simple edge-based detection
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            edges = cv2.Canny(gray, 50, 150)
-            
-            # Calculate edge density
-            edge_density = np.sum(edges > 0) / edges.size
+            # Simple edge-based detection (fallback if OpenCV unavailable)
+            if cv2 is not None:  # type: ignore
+                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # type: ignore
+                edges = cv2.Canny(gray, 50, 150)  # type: ignore
+                edge_density = np.sum(edges > 0) / edges.size
+            else:
+                # Numpy-based gradient magnitude as crude edge proxy
+                if image.ndim == 3:
+                    gray = np.mean(image, axis=2)
+                else:
+                    gray = image
+                gx = np.gradient(gray, axis=0)
+                gy = np.gradient(gray, axis=1)
+                mag = np.sqrt(gx * gx + gy * gy)
+                edge_density = float(np.mean(mag > (mag.mean() + mag.std())))
             
             # Simple heuristic
             is_manipulated = edge_density > 0.15
@@ -200,18 +220,24 @@ class ImageProcessor:
             # Load image for hashing
             pil_image = Image.open(file_path)
             
-            # Generate different types of hashes
-            hashes = {
-                "phash": str(imagehash.phash(pil_image)),
-                "dhash": str(imagehash.dhash(pil_image)),
-                "whash": str(imagehash.whash(pil_image)),
-                "average_hash": str(imagehash.average_hash(pil_image))
-            }
+            if imagehash is not None:  # type: ignore
+                # Generate different types of hashes
+                hashes = {
+                    "phash": str(imagehash.phash(pil_image)),  # type: ignore
+                    "dhash": str(imagehash.dhash(pil_image)),  # type: ignore
+                    "whash": str(imagehash.whash(pil_image)),  # type: ignore
+                    "average_hash": str(imagehash.average_hash(pil_image))  # type: ignore
+                }
+                hash_matches = list(hashes.values())
+            else:
+                # Fallback: use simple content hash
+                import hashlib as _hashlib
+                with open(file_path, 'rb') as f:
+                    digest = _hashlib.sha256(f.read()).hexdigest()
+                hash_matches = [digest]
             
             # For now, return empty similarity results
-            # In production, this would query a database of known images
             similar_images = []
-            hash_matches = list(hashes.values())
             
             return ImageSimilarityResult(
                 similar_images=similar_images,
@@ -320,18 +346,20 @@ class ImageProcessor:
     async def _detect_faces(self, image: np.ndarray) -> List[Dict[str, Any]]:
         """Detect faces in the image"""
         try:
+            if cv2 is None:  # type: ignore
+                return []
             # Use OpenCV's built-in face detection
-            face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')  # type: ignore
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # type: ignore
             
-            faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+            faces = face_cascade.detectMultiScale(gray, 1.1, 4)  # type: ignore
             
             face_results = []
             for (x, y, w, h) in faces:
                 face_results.append({
                     "bbox": {"x": int(x), "y": int(y), "width": int(w), "height": int(h)},
-                    "confidence": 0.8,  # OpenCV doesn't provide confidence scores
-                    "landmarks": []  # Would be populated by more advanced models
+                    "confidence": 0.8,
+                    "landmarks": []
                 })
             
             return face_results
@@ -343,16 +371,23 @@ class ImageProcessor:
     async def _assess_quality(self, image: np.ndarray) -> float:
         """Assess image quality"""
         try:
-            # Convert to grayscale
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            
-            # Calculate Laplacian variance (focus measure)
-            laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
-            
-            # Normalize to 0-1 range (rough approximation)
-            quality_score = min(laplacian_var / 1000.0, 1.0)
-            
-            return quality_score
+            if cv2 is not None:  # type: ignore
+                # Convert to grayscale
+                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # type: ignore
+                # Calculate Laplacian variance (focus measure)
+                laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()  # type: ignore
+                quality_score = min(laplacian_var / 1000.0, 1.0)
+                return quality_score
+            else:
+                # Fallback using numpy gradient energy
+                if image.ndim == 3:
+                    gray = np.mean(image, axis=2)
+                else:
+                    gray = image
+                gx = np.gradient(gray, axis=0)
+                gy = np.gradient(gray, axis=1)
+                energy = float(np.mean(gx * gx + gy * gy))
+                return min(energy / 1000.0, 1.0)
             
         except Exception as e:
             logger.error(f"Quality assessment failed: {e}")
@@ -386,7 +421,17 @@ class ImageProcessor:
     async def _preprocess_for_manipulation_detection(self, image: np.ndarray) -> np.ndarray:
         """Preprocess image for manipulation detection model"""
         # Resize to model input size
-        processed = cv2.resize(image, (224, 224))
+        if cv2 is not None:  # type: ignore
+            processed = cv2.resize(image, (224, 224))  # type: ignore
+        else:
+            try:
+                pil = Image.fromarray(image if image.ndim == 2 else image[:, :, :3].astype(np.uint8))
+                pil = pil.resize((224, 224))
+                processed = np.array(pil)
+            except Exception:
+                # Last-resort: simple center crop/pad
+                h, w = image.shape[:2]
+                processed = image[:min(h,224), :min(w,224)]
         
         # Normalize pixel values
         processed = processed.astype(np.float32) / 255.0

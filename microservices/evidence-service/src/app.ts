@@ -15,6 +15,7 @@ import { AuthRouter } from './routes/AuthRouter.js';
 import { HealthRouter } from './routes/HealthRouter.js';
 import { CaseRouter } from './routes/CaseRouter.js';
 import { ActivityRouter } from './routes/ActivityRouter.js';
+import { AnalysisMonitor } from './services/AnalysisMonitor.js';
 
 /**
  * Main Application Class
@@ -29,6 +30,7 @@ export class ForensicEvidenceApp {
   private databaseManager: DatabaseManager;
   private messageQueueManager: MessageQueueManager;
   private ipfsManager: IPFSManager;
+  private analysisMonitor: AnalysisMonitor;
   private server: any;
   private isShuttingDown: boolean = false;
 
@@ -45,6 +47,7 @@ export class ForensicEvidenceApp {
     this.messageQueueManager = MessageQueueManager.getInstance();
     console.log('🌐 Getting IPFSManager instance...');
     this.ipfsManager = IPFSManager.getInstance();
+    this.analysisMonitor = AnalysisMonitor.getInstance();
     console.log('✅ App constructor completed');
   }
 
@@ -60,6 +63,10 @@ export class ForensicEvidenceApp {
    */
   private async initializeMiddleware(): Promise<void> {
     try {
+      // Trust only local/docker subnets instead of all proxies to avoid permissive trust warnings
+      // Covers localhost and default Docker bridge networks (172.16.0.0/12)
+      this.app.set('trust proxy', 'loopback, 172.16.0.0/12');
+
       // Security middleware
       this.app.use(helmet({
         contentSecurityPolicy: {
@@ -242,6 +249,12 @@ export class ForensicEvidenceApp {
       this.logger.info('🔗 Connecting to external services...');
       setImmediate(async () => {
         await this.connectServices();
+        // Start background analysis monitor after services are up
+        try {
+          this.analysisMonitor.start();
+        } catch (e) {
+          this.logger.warn('Failed to start AI analysis monitor', e);
+        }
       });
 
       // Graceful shutdown handlers

@@ -94,6 +94,29 @@ export class ErrorHandler {
       return new AppError('Token expired', 401);
     }
 
+    // Handle multer errors
+    if (error.name === 'MulterError') {
+      const multerError = error as any;
+      switch (multerError.code) {
+        case 'LIMIT_FILE_SIZE':
+          return new AppError(`File too large. Maximum size allowed is ${this.formatFileSize(this.getMaxFileSize())}`, 400);
+        case 'LIMIT_FILE_COUNT':
+          return new AppError('Too many files uploaded', 400);
+        case 'LIMIT_UNEXPECTED_FILE':
+          return new AppError('Unexpected file field', 400);
+        case 'LIMIT_PART_COUNT':
+          return new AppError('Too many parts in multipart request', 400);
+        case 'LIMIT_FIELD_KEY':
+          return new AppError('Field name too long', 400);
+        case 'LIMIT_FIELD_VALUE':
+          return new AppError('Field value too long', 400);
+        case 'LIMIT_FIELD_COUNT':
+          return new AppError('Too many fields', 400);
+        default:
+          return new AppError(`File upload error: ${multerError.message}`, 400);
+      }
+    }
+
     // Default to internal server error
     return new AppError(
       error.message || 'Internal server error',
@@ -122,6 +145,25 @@ export class ErrorHandler {
     } else if (error.statusCode >= 400) {
       this.logger.warn('Client error', errorLog);
     }
+  }
+
+  /**
+   * Get maximum file size from configuration
+   */
+  private getMaxFileSize(): number {
+    const fileUploadConfig = this.config.get<any>('fileUpload');
+    return fileUploadConfig?.maxFileSize || 104857600; // Default 100MB
+  }
+
+  /**
+   * Format file size in human readable format
+   */
+  private formatFileSize(bytes: number): string {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
   /**
