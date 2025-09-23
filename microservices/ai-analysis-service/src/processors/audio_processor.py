@@ -57,11 +57,19 @@ class AudioProcessor:
         """
         start_time = time.time()
         
+        # Always attempt to gather basic file info so we can surface
+        # technical properties even if signal analysis fails.
+        file_info: Dict[str, Any] = {}
+        try:
+            file_info = await self._get_audio_file_info(file_path)
+        except Exception as e:
+            logger.warning(f"File info extraction failed for {file_path}: {e}")
+        
         try:
             # Load and validate audio
             audio_data, sample_rate = await self._load_audio(file_path)
             
-            # Run all analysis components in parallel
+            # Run all analysis components in parallel, tolerate individual errors
             tasks = [
                 self._identify_voice(audio_data, sample_rate, file_path),
                 self._analyze_authenticity(audio_data, sample_rate, file_path),
@@ -70,16 +78,18 @@ class AudioProcessor:
                 self._analyze_noise(audio_data, sample_rate),
                 self._analyze_spectrum(audio_data, sample_rate)
             ]
-            
-            results = await asyncio.gather(*tasks)
-            
-            # Compile final results
-            voice_identification = results[0]
-            authenticity_analysis = results[1]
-            technical_analysis = results[2]
-            transcription = results[3]
-            noise_analysis = results[4]
-            spectrum_analysis = results[5]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            def _safe(idx: int, default):
+                val = results[idx]
+                return val if not isinstance(val, Exception) else default
+
+            voice_identification = _safe(0, VoiceIdentificationResult(speaker_id=None, confidence=0.0, voice_characteristics={}, comparison_results=[]))
+            authenticity_analysis = _safe(1, AudioAuthenticityResult(is_authentic=False, confidence=0.0, tampering_indicators=["analysis_error"], splicing_detection=[]))
+            technical_analysis = _safe(2, {"error": "technical_analysis_failed"})
+            transcription = _safe(3, None)
+            noise_analysis = _safe(4, {"error": "noise_analysis_failed"})
+            spectrum_analysis = _safe(5, {"error": "spectrum_analysis_failed"})
             
             processing_time = time.time() - start_time
             
@@ -108,32 +118,116 @@ class AudioProcessor:
             )
             
         except Exception as e:
+            # Return structured result on fatal error; include best-effort technical props
+            processing_time = time.time() - start_time
             logger.error(f"Error analyzing audio {file_path}: {e}")
-            raise
+
+            # Build minimal technical properties from file_info
+            duration_val = file_info.get("duration")
+            try:
+                if (duration_val is None) and file_info.get("frames") and file_info.get("sample_rate"):
+                    duration_val = float(file_info["frames"]) / float(file_info["sample_rate"])
+            except Exception:
+                pass
+
+            minimal_technical = {
+                "duration": float(duration_val) if isinstance(duration_val, (int, float)) else None,
+                "sample_rate": file_info.get("sample_rate"),
+                "channels": file_info.get("channels"),
+                "bit_depth": file_info.get("bit_depth"),
+                "format": file_info.get("format"),
+                "file_size": file_info.get("file_size"),
+                "encoding": file_info.get("encoding", "unknown")
+            }
+
+            return AudioAnalysisResult(
+                analysis_id=request.analysis_id,
+                evidence_id=request.evidence_id,
+                confidence_score=0.0,
+                processing_time=processing_time,
+                model_version="1.0.0",
+                voice_identification=VoiceIdentificationResult(speaker_id=None, confidence=0.0, voice_characteristics={}, comparison_results=[]),
+                authenticity_analysis=AudioAuthenticityResult(is_authentic=False, confidence=0.0, tampering_indicators=["analysis_error"], splicing_detection=[]),
+                technical_analysis=minimal_technical,
+                transcription=None,
+                noise_analysis={"error": "failed"},
+                spectrum_analysis={"error": "failed"},
+                metadata={
+                    "file_path": file_path,
+                    "analysis_timestamp": datetime.utcnow().isoformat(),
+                    "processor_version": "1.0.0",
+                    "error": "audio_analysis_failed"
+                }
+            )
     
     async def _load_audio(self, file_path: str) -> tuple[np.ndarray, int]:
-        """Load and validate audio file"""
+        """Load and validate audio file with robust fallbacks.
+
+        Priority: librosa -> soundfile -> wave (PCM) -> raise.
+        """
+        last_error: Optional[Exception] = None
+        # Attempt 1: librosa
         try:
-            # Load audio file
-            if librosa is None:  # type: ignore
-                raise ValueError("librosa not available")
-            audio_data, sample_rate = librosa.load(file_path, sr=self.sample_rate)  # type: ignore
-            
-            # Validate audio properties
-            duration = len(audio_data) / sample_rate
-            
-            if duration > 3600:  # 1 hour limit
-                raise ValueError("Audio duration exceeds 1 hour limit")
-            
-            if len(audio_data) == 0:
-                raise ValueError("Audio file is empty")
-            
-            logger.debug(f"Audio loaded: {duration:.2f}s duration, {sample_rate}Hz sample rate")
-            return audio_data, sample_rate
-            
+            if librosa is not None:  # type: ignore
+                audio_data, sample_rate = librosa.load(file_path, sr=self.sample_rate)  # type: ignore
+                if audio_data is None or len(audio_data) == 0:
+                    raise ValueError("Empty audio from librosa")
+                duration = len(audio_data) / sample_rate
+                if duration > 3600:
+                    raise ValueError("Audio duration exceeds 1 hour limit")
+                logger.debug(f"Audio loaded via librosa: {duration:.2f}s @ {sample_rate}Hz")
+                return audio_data.astype(np.float32), int(sample_rate)
         except Exception as e:
-            logger.error(f"Failed to load audio {file_path}: {e}")
-            raise
+            last_error = e
+            logger.debug(f"librosa load failed, will try fallbacks: {e}")
+
+        # Attempt 2: soundfile
+        try:
+            if sf is not None:  # type: ignore
+                data, sr = sf.read(file_path, dtype='float32', always_2d=False)  # type: ignore
+                if data is None or data.size == 0:
+                    raise ValueError("Empty audio from soundfile")
+                # If stereo or multi-channel, downmix to mono for analysis consistency
+                if isinstance(data, np.ndarray) and data.ndim == 2:
+                    data = np.mean(data, axis=1)
+                duration = len(data) / sr
+                if duration > 3600:
+                    raise ValueError("Audio duration exceeds 1 hour limit")
+                logger.debug(f"Audio loaded via soundfile: {duration:.2f}s @ {sr}Hz")
+                return data.astype(np.float32), int(sr)
+        except Exception as e:
+            last_error = e
+            logger.debug(f"soundfile load failed, will try wave: {e}")
+
+        # Attempt 3: built-in wave (PCM only)
+        try:
+            import wave
+            with wave.open(file_path, 'rb') as wf:
+                sr = wf.getframerate()
+                n_channels = wf.getnchannels()
+                n_frames = wf.getnframes()
+                frames = wf.readframes(n_frames)
+                sampwidth = wf.getsampwidth()
+            # Convert bytes to numpy and normalize
+            dtype_map = {1: np.int8, 2: np.int16, 3: None, 4: np.int32}
+            dtype = dtype_map.get(sampwidth)
+            if dtype is None:
+                raise ValueError("Unsupported 24-bit PCM without soundfile")
+            audio = np.frombuffer(frames, dtype=dtype)
+            if n_channels > 1:
+                audio = audio.reshape(-1, n_channels).mean(axis=1)
+            # Normalize to [-1, 1]
+            max_val = np.iinfo(dtype).max if np.issubdtype(dtype, np.integer) else 1.0
+            data = (audio.astype(np.float32) / float(max_val))
+            duration = len(data) / sr
+            if duration > 3600:
+                raise ValueError("Audio duration exceeds 1 hour limit")
+            logger.debug(f"Audio loaded via wave: {duration:.2f}s @ {sr}Hz")
+            return data.astype(np.float32), int(sr)
+        except Exception as e:
+            last_error = e
+            logger.error(f"Failed to load audio {file_path} via all backends: {e}")
+            raise last_error or e
     
     async def _identify_voice(self, audio_data: np.ndarray, sample_rate: int, file_path: str) -> VoiceIdentificationResult:
         """Identify voice characteristics and speaker"""
@@ -241,11 +335,21 @@ class AudioProcessor:
             
             # Detect audio format and quality
             file_info = await self._get_audio_file_info(file_path)
-            
+            # Determine channel count reliably when available via soundfile
+            channels = 1
+            try:
+                if sf is not None:
+                    info = sf.info(file_path)
+                    channels = int(getattr(info, 'channels', 1))
+                elif isinstance(audio_data, np.ndarray) and audio_data.ndim == 2:
+                    channels = int(audio_data.shape[1])
+            except Exception:
+                channels = 1
+
             return {
                 "duration": duration,
                 "sample_rate": sample_rate,
-                "channels": 1,  # Assuming mono for now
+                "channels": channels,
                 "bit_depth": file_info.get("bit_depth", 16),
                 "format": file_info.get("format", "unknown"),
                 "rms_energy": float(rms_energy),
@@ -494,20 +598,37 @@ class AudioProcessor:
             file_path_obj = Path(file_path)
             stat = file_path_obj.stat()
             
-            # Try to get audio file info using soundfile
+            # Try to get audio file info using soundfile; on failure, fall back
             try:
-                info = sf.info(file_path)
+                if sf is None:
+                    raise RuntimeError("soundfile unavailable")
+                info = sf.info(file_path)  # type: ignore
+                bit_depth = 16
+                try:
+                    subtype_info = str(getattr(info, 'subtype', ''))
+                    # Common mappings
+                    if 'PCM_24' in subtype_info or '24' in subtype_info:
+                        bit_depth = 24
+                    elif 'PCM_32' in subtype_info or '32' in subtype_info:
+                        bit_depth = 32
+                    elif 'PCM_U8' in subtype_info or '8' in subtype_info:
+                        bit_depth = 8
+                    elif 'PCM_16' in subtype_info or '16' in subtype_info:
+                        bit_depth = 16
+                except Exception:
+                    bit_depth = 16
                 return {
                     "file_size": stat.st_size,
-                    "format": info.format,
-                    "subtype": info.subtype,
-                    "channels": info.channels,
-                    "sample_rate": info.samplerate,
-                    "frames": info.frames,
-                    "duration": info.duration,
-                    "bit_depth": getattr(info, 'subtype_info', {}).get('bit_depth', 16)
+                    "format": getattr(info, 'format', 'unknown'),
+                    "subtype": getattr(info, 'subtype', 'unknown'),
+                    "channels": getattr(info, 'channels', None),
+                    "sample_rate": getattr(info, 'samplerate', None),
+                    "frames": getattr(info, 'frames', None),
+                    "duration": getattr(info, 'duration', None),
+                    "bit_depth": bit_depth
                 }
-            except:
+            except Exception:
+                # Fallback when soundfile is not available or fails
                 return {
                     "file_size": stat.st_size,
                     "format": file_path_obj.suffix.lower(),

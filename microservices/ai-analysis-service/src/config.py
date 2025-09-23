@@ -33,7 +33,8 @@ class Settings(BaseSettings):
     
     # Database Configuration
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
-    MONGODB_URI: str = os.getenv("MONGODB_URI", "")
+    # Prefer dedicated AI Mongo if provided
+    MONGODB_URI: str = os.getenv("MONGODB_URI_AI", os.getenv("MONGODB_URI", ""))
     DB_POOL_SIZE: int = 20
     DB_MAX_OVERFLOW: int = 40
     DB_POOL_TIMEOUT: int = 30
@@ -87,6 +88,8 @@ class Settings(BaseSettings):
     IMAGE_ANALYSIS_TIMEOUT: int = 60
     IMAGE_ENABLE_OBJECT_DETECTION: bool = False
     IMAGE_ENABLE_OCR: bool = True
+    OCR_PREPROCESS_ENABLE: bool = False
+    OCR_PREPROCESS_METHOD: str = "adaptive"  # adaptive|otsu|none
     OCR_LANGUAGE: str = os.getenv("OCR_LANGUAGE", "eng")
     
     # Video Analysis Settings

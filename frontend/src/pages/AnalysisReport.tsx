@@ -46,13 +46,27 @@ export const AnalysisReport: React.FC = () => {
       const confidence = confNum <= 1 ? Math.round(confNum * 10000) / 100 : Math.round(confNum * 100) / 100;
 
       const anomaliesDetected = Boolean(
-        source?.anomaliesDetected === true || source?.anomalies === true || source?.manipulation?.isManipulated === true || source?.manipulation_detection?.is_manipulated === true
+        source?.anomaliesDetected === true ||
+        source?.anomalies === true ||
+        source?.manipulation?.isManipulated === true ||
+        source?.manipulation_detection?.is_manipulated === true ||
+        (Array.isArray(source?.authenticity_analysis?.tampering_indicators) && source.authenticity_analysis.tampering_indicators.length > 0) ||
+        source?.authenticity_analysis?.is_authentic === false
       );
 
       // Normalize processing time to milliseconds for UI display (UI divides by 1000)
-      const rawProc = pickNumber(source?.processing_time_ms ?? source?.processing_time ?? source?.processingTime ?? 0);
-      // If value looks like seconds (< 100), convert to ms; otherwise assume already ms
-      const processingTime = rawProc > 0 && rawProc < 100 ? Math.round(rawProc * 1000) : rawProc;
+      // Normalize processing time to milliseconds deterministically:
+      // - prefer processing_time_ms when available
+      // - otherwise, treat processing_time as seconds and convert to ms
+      // - or accept processingTime (ms) as-is
+      let processingTime = 0;
+      if (source?.processing_time_ms != null) {
+        processingTime = pickNumber(source.processing_time_ms);
+      } else if (source?.processing_time != null) {
+        processingTime = Math.round(pickNumber(source.processing_time) * 1000);
+      } else if (source?.processingTime != null) {
+        processingTime = pickNumber(source.processingTime);
+      }
       const modelVersion = String(source?.model_version ?? source?.modelVersion ?? '');
 
       // Map core image fields into UI-friendly structure when available
@@ -101,9 +115,116 @@ export const AnalysisReport: React.FC = () => {
         };
       };
 
+      const mapVideoFields = (r: any) => {
+        const deep = r?.deepfake_detection || {};
+        const tech = r?.technical_analysis || {};
+        const motion = r?.motion_analysis || {};
+        return {
+          manipulation: {
+            isManipulated: Boolean(deep?.is_deepfake ?? false),
+            // store as percent for UI display consistency
+            confidence: pickNumber(deep?.confidence ?? 0) * 100,
+            techniques: deep?.detection_method ? [String(deep.detection_method)] : [],
+          },
+          metadata: {
+            extracted: {
+              duration: tech?.duration,
+              frameRate: tech?.frame_rate,
+              resolution: tech?.resolution,
+              codec: tech?.codec,
+              bitrate: tech?.bitrate,
+              audioChannels: tech?.audio_channels,
+              editPoints: Array.isArray(tech?.edit_points) ? tech.edit_points.length : 0,
+            },
+            inconsistencies: [],
+          },
+          content: {
+            objects: [],
+            faces: [],
+          },
+          anomalies: [],
+          authenticity: {
+            isAuthentic: !(Boolean(deep?.is_deepfake)),
+            confidence: Math.max(0, Math.min(100, (1 - pickNumber(deep?.confidence ?? 0)) * 100)),
+            issues: [],
+            verificationMethods: [] as string[],
+          },
+          motion: motion || {},
+        };
+      };
+
+      const mapAudioFields = (r: any) => {
+        const auth = r?.authenticity_analysis || {};
+        const tech = r?.technical_analysis || {};
+        const voice = r?.voice_identification || {};
+        const spectrum = r?.spectrum_analysis || {};
+        const noise = r?.noise_analysis || {};
+        const transcription = r?.transcription || '';
+        const tampering = Array.isArray(auth?.tampering_indicators) ? auth.tampering_indicators : [];
+        return {
+          authenticity: {
+            isAuthentic: Boolean(auth?.is_authentic),
+            confidence: Math.max(0, Math.min(1, pickNumber(auth?.confidence ?? 0))),
+            issues: tampering,
+            verificationMethods: [] as string[],
+          },
+          metadata: {
+            extracted: {
+              duration: tech?.duration,
+              sample_rate: tech?.sample_rate,
+              channels: tech?.channels,
+              bit_depth: tech?.bit_depth,
+              format: tech?.format,
+              codec: tech?.encoding || tech?.codec,
+              bitrate: tech?.bitrate,
+              file_size: tech?.file_size,
+            },
+            inconsistencies: [],
+          },
+          content: {
+            text: transcription,
+          },
+          anomalies: tampering.map((t: string) => ({ type: 'tampering_indicator', description: t, severity: 'medium', confidence: 0.5 })),
+          voice_identification: voice,
+          technical_analysis: tech,
+          spectrum_analysis: spectrum,
+          noise_analysis: noise,
+        };
+      };
+
+      const mapDocumentFields = (r: any) => {
+        const auth = r?.authenticity_analysis || {};
+        const content = r?.content_analysis || {};
+        const meta = r?.metadata_analysis || {};
+        const structure = r?.structure_analysis || {};
+        const plagiarism = r?.plagiarism_check || {};
+        const issues: string[] = Array.isArray(auth?.forgery_indicators) ? auth.forgery_indicators : [];
+        return {
+          authenticity: {
+            isAuthentic: Boolean(auth?.is_authentic),
+            confidence: Math.max(0, Math.min(1, pickNumber(auth?.confidence ?? 0))),
+            issues,
+            verificationMethods: [] as string[],
+          },
+          metadata: {
+            extracted: meta,
+            inconsistencies: [],
+          },
+          content: {
+            text: content?.text_content || '',
+          },
+          anomalies: [],
+          structure_analysis: structure,
+          plagiarism_check: plagiarism,
+        };
+      };
+
       const normalizedResults = (() => {
         const t = getAnalysisType(evidence?.type || EvidenceType.IMAGE);
         if (t === AnalysisType.IMAGE) return mapImageFields(source);
+        if (t === AnalysisType.VIDEO) return mapVideoFields(source);
+        if (t === AnalysisType.AUDIO) return mapAudioFields(source);
+        if (t === AnalysisType.DOCUMENT) return mapDocumentFields(source);
         return source;
       })();
 
@@ -597,25 +718,25 @@ export const AnalysisReport: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-500">Pages:</span>
                       <span className="text-sm font-medium text-gray-900">
-                        {structureAnalysis.page_count || 'Unknown'}
+                        {structureAnalysis.page_count ?? 'Unknown'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-500">Sections:</span>
                       <span className="text-sm font-medium text-gray-900">
-                        {structureAnalysis.section_count || 'Unknown'}
+                        {structureAnalysis.section_count ?? 'Unknown'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-500">Tables:</span>
                       <span className="text-sm font-medium text-gray-900">
-                        {structureAnalysis.table_count || 'Unknown'}
+                        {structureAnalysis.table_count ?? 'Unknown'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-500">Images:</span>
                       <span className="text-sm font-medium text-gray-900">
-                        {structureAnalysis.image_count || 'Unknown'}
+                        {structureAnalysis.image_count ?? 'Unknown'}
                       </span>
                     </div>
                   </div>

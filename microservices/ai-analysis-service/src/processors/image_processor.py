@@ -157,9 +157,11 @@ class ImageProcessor:
                 conf = float(out.get("confidence_score", 0.0))
                 if conf > 1.0:
                     conf = max(0.0, min(1.0, conf / 100.0))
+                mt_raw = out.get("manipulation_type")
+                mt_val = str(mt_raw) if (mt_raw and str(mt_raw).lower() != 'unknown') else None
                 return ImageManipulationResult(
                     is_manipulated=bool(out.get("is_authentic") is False),
-                    manipulation_type=str(out.get("manipulation_type") or "unknown"),
+                    manipulation_type=mt_val,
                     confidence=conf,
                     affected_regions=out.get("affected_regions", [])
                 )
@@ -302,7 +304,7 @@ class ImageProcessor:
             exif_data = pil_image._getexif()
             
             if exif_data is None:
-                return ImageExifData(is_modified=True)
+                return ImageExifData(is_modified=False)
             
             # Parse EXIF data
             exif_dict = {}
@@ -330,8 +332,17 @@ class ImageProcessor:
             if gps_info:
                 gps_coordinates = self._parse_gps_coordinates(gps_info)
             
-            # Simple modification detection
-            is_modified = software_used is not None and 'Adobe' in str(software_used)
+            # Simple modification detection: consider a few common editors only
+            is_modified = False
+            try:
+                if software_used:
+                    sw = str(software_used).lower()
+                    for token in ["adobe", "photoshop", "gimp", "canva"]:
+                        if token in sw:
+                            is_modified = True
+                            break
+            except Exception:
+                is_modified = False
             
             return ImageExifData(
                 camera_make=camera_make,
@@ -489,7 +500,11 @@ class ImageProcessor:
             return {}
 
     async def _extract_text_ocr(self, file_path: str) -> str:
-        """Extract visible text using Tesseract OCR (simple pipeline)."""
+        """Extract visible text using Tesseract OCR.
+
+        Supports optional preprocessing controlled by settings.OCR_PREPROCESS_ENABLE
+        and settings.OCR_PREPROCESS_METHOD (adaptive|otsu|none).
+        """
         if not settings.IMAGE_ENABLE_OCR:
             return ""
         try:
@@ -503,7 +518,21 @@ class ImageProcessor:
             if w < 200 or h < 200:
                 scale = max(1, int(200 / min(w, h)))
                 gray = gray.resize((w * scale, h * scale))
-            text = pytesseract.image_to_string(gray, lang=settings.OCR_LANGUAGE)
+            # Optional preprocessing using OpenCV if available
+            preprocessed_img = gray
+            try:
+                if getattr(settings, 'OCR_PREPROCESS_ENABLE', False) and cv2 is not None:  # type: ignore
+                    img_np = np.array(gray)
+                    method = str(getattr(settings, 'OCR_PREPROCESS_METHOD', 'adaptive')).lower()
+                    if method == 'adaptive':
+                        img_np = cv2.adaptiveThreshold(img_np, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 10)  # type: ignore
+                    elif method == 'otsu':
+                        _, img_np = cv2.threshold(img_np, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)  # type: ignore
+                    preprocessed_img = Image.fromarray(img_np)
+            except Exception:
+                preprocessed_img = gray
+
+            text = pytesseract.image_to_string(preprocessed_img, lang=settings.OCR_LANGUAGE)
             text = (text or '').strip()
             return text
         except Exception as e:

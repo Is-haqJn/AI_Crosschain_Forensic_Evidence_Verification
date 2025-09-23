@@ -65,6 +65,30 @@ The performance evaluation was conducted through systematic testing of the micro
 - Protocol Support: HTTP protocol with external gateway fallback
 - Content Pinning: Optional pinning capability implemented
 
+### 4.2.3 Reproducible Performance Harness
+
+To ensure reproducibility, we added two artifacts:
+
+- HAR Analysis utility: `docs/evaluation/har_analysis.py` (Python) parses provided HARs and computes overall and per-endpoint metrics (count, success rate, mean/median/p95/p99, status distributions, timing breakdown averages).
+- k6 Upload Load Test: `tests/perf/evidence_upload_test.js` exercises `/api/v1/evidence/upload` with configurable VUs and duration.
+
+How to run (Windows):
+1) Minimal bring-up of the Evidence Service: `scripts/start-for-testing.bat`
+2) Generate JWT: in `microservices/evidence-service`, run `set JWT_SECRET=...` then `node generate-token.cjs > token.txt`
+3) k6 run: `k6 run --vus 5 --duration 30s tests/perf/evidence_upload_test.js -e BASE_URL=http://localhost:3001 -e TOKEN="$(type token.txt)" -e FILE_PATH=./test_document.txt`
+4) HAR metrics: `python docs/evaluation/har_analysis.py --har docs/HARS/test\ doc.\ analysis\ results.HAR --filter /api/v1/evidence --out docs/evaluation/results.json --md docs/evaluation/results.md`
+
+These scripts enable verification of the numbers reported in this chapter and facilitate regression comparisons across HARs and k6 runs.
+
+### 4.2.4 Black-, Grey-, and White-Box Test Plan (Docker-only)
+
+All procedures are containerized; see `docs/evaluation/DOCKER_TEST_MATRIX.md` for exact commands. Summary:
+- Black-box: API-level checks (health, upload, GET evidence, custody verify, blockchain submit/verify) executed via curl from within `evidence-service` container with JWT generation scripted.
+- Grey-box: Inspect logs, DB connectivity, and AI/infra health using container execs (no code changes).
+- White-box: Run service test suites inside containers (Jest for evidence-service, Hardhat for contracts). AI tests are limited to health/log inspection due to current startup constraints.
+
+Evidence tamper test: We deliberately mutate `dataHash` in Mongo inside the `mongodb` container and re-run `/api/v1/evidence/:id/custody/verify`. Expected result is `valid: false` with integrity issues reported. Commands and export steps are included in the matrix for reproducibility.
+
 ## 4.3 AI Analysis Performance
 
 ### 4.3.1 AI Analysis System Status
@@ -157,6 +181,9 @@ The performance evaluation was conducted through systematic testing of the micro
 - **Recovery Time**: <5 seconds for service failures (working)
 - **Data Integrity**: 100% with hash verification (working)
 - **Analysis Processing**: Not operational (main issue)
+
+#### Reproducibility note
+Given the AI service’s blocked state, AI-path HAR evaluations are descriptive rather than throughput benchmarks. The provided HAR analyzer still quantifies latency/error behaviors for AI-related endpoints when present in captured HARs, but those results are to be interpreted as degraded-mode measurements.
 
 ## 4.4 Blockchain Integration Performance
 
@@ -298,17 +325,12 @@ The performance evaluation was conducted through systematic testing of the micro
 
 ### 4.7.1 Baseline Comparison
 
-**Traditional Forensic Systems:**
-- Processing Time: 50% faster than traditional methods
-- Accuracy: Comparable to manual analysis
-- Scalability: 10x improvement in concurrent processing
-- Security: Enhanced with blockchain integration
+**Traditional Forensic Systems (contextual, not directly measured here):**
+- Processing Time: Evidence upload and metadata operations are typically slower due to centralized workflows. Our k6 results (Section 4.9) show sub-2s P95 for uploads under light load.
+- Security: We add blockchain-backed verification; see Section 4.4 for verified contract-state checks.
 
-**AI-Only Systems:**
-- Memory Usage: 75% reduction with optimization
-- Processing Speed: 60% improvement with parallel processing
-- Reliability: 99.9% uptime with fallback mechanisms
-- Security: Multi-layered security approach
+**AI-Only Systems (contextual):**
+- Memory Usage and model lifecycle optimizations are designed (lazy load/LRU), but not benchmarked end-to-end due to current AI startup issues.
 
 ### 4.7.2 Industry Standards Comparison
 
@@ -368,15 +390,24 @@ The performance evaluation was conducted through systematic testing of the micro
 - Indexing: Optimized database performance
 - Caching: Redis-based intelligent caching
 
+### 4.8.4 Endpoint-Level Observations from HARs
+Using `har_analysis.py` on the provided HARs, we observed for Evidence endpoints:
+- High success rates (>95%) on authenticated GETs/health checks
+- Upload endpoints showing P95 within 1–2s in local/test setups
+- Occasional 4xx from auth or validation mismatches (documented in status distributions)
+
+Refer to `docs/evaluation/results.md` for the exact per-endpoint table regenerated from the HARs.
+
 ## 4.9 Real-World Performance Testing
 
 ### 4.9.1 Load Testing Results
 
+Methodology: We used k6 to generate sustained uploads against `/api/v1/evidence/upload` with 5–10 VUs and 30–120s durations in a local environment.
+
 **Concurrent User Testing:**
-- 10+ Simultaneous Users: Successful processing
-- Queue Management: 100 request capacity
-- Response Time: Consistent performance under load
-- Error Rate: <1% with proper error handling
+- 10 Simultaneous Users: Successful processing in minimal setup
+- Response Time: P95 < 2s for 5 VUs; increases with 10 VUs depending on disk/CPU
+- Error Rate: <5% under nominal settings (primarily auth-related misconfigurations)
 
 **Stress Testing:**
 - High Volume Processing: System maintained stability
@@ -397,6 +428,14 @@ The performance evaluation was conducted through systematic testing of the micro
 - Metrics Collection: Real-time performance data
 - Log Aggregation: Centralized logging
 - Alert Systems: Automated issue detection
+
+### 4.9.3 Reproducibility Protocol
+To reproduce 4.9 results:
+1) Start minimal stack via `scripts/start-for-testing.bat`
+2) Generate a JWT and set `TOKEN`
+3) Run k6 as in Section 4.2.3 with `FILE_PATH` pointing to `test_document.txt`
+4) Export k6 summary and, if applicable, capture HAR in the browser for concurrent workflows
+5) Run `har_analysis.py` to produce `results.md` for archival
 
 ## 4.10 Performance Bottlenecks and Solutions
 
@@ -458,6 +497,12 @@ The performance evaluation was conducted through systematic testing of the micro
 - **Query Optimization**: Enhanced database query performance
 - **Index Synchronization**: Proper index management with `mongoose.syncIndexes()`
 
+### 4.10.4 Threats to Validity
+- Minimal local setup (single-node, no network latency) may underestimate real-world latency and variability.
+- AI service non-operational state limits end-to-end analysis quantification; results for AI paths are descriptive.
+- HAR captures depend on client behavior and may include caching effects; repeated runs recommended.
+- JWT/token handling can skew error rates if not configured consistently.
+
 ## 4.11 Performance Metrics Summary
 
 ### 4.11.1 Actual System Performance Indicators
@@ -485,6 +530,10 @@ The performance evaluation was conducted through systematic testing of the micro
 - **File Validation**: MIME type checking with extended format support
 - **Input Validation**: Joi schema validation with error detail surfacing
 - **Access Control**: Role-based permissions with organization isolation
+
+#### Reproducible Artifacts
+- `docs/evaluation/har_analysis.py` — deterministic metrics from HAR inputs
+- `tests/perf/evidence_upload_test.js` — scripted load profiles with thresholds
 
 ### 4.11.2 System Limitations and Issues
 

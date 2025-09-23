@@ -47,11 +47,15 @@ class VideoProcessor:
 
     async def analyze(self, file_path: str, request: AnalysisRequest) -> VideoAnalysisResult:
         """
-        Perform comprehensive video analysis
+        Perform comprehensive video analysis with robust fallbacks to avoid runtime failures.
         """
         start_time = time.time()
+        video_capture = None
         try:
+            # Load video safely
             video_capture = await self._load_video(file_path)
+
+            # Run analysis components; tolerate individual task errors
             tasks = [
                 self._detect_deepfake(video_capture, file_path),
                 self._analyze_technical_properties(video_capture, file_path),
@@ -60,8 +64,44 @@ class VideoProcessor:
                 self._track_faces(video_capture),
                 self._extract_audio_analysis(file_path),
             ]
-            results = await asyncio.gather(*tasks)
-            deepfake_result, technical_analysis, frame_samples, motion_analysis, face_tracking, audio_analysis = results
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Unpack with fallbacks if any task failed
+            def _is_exc(x: Any) -> bool:
+                return isinstance(x, Exception)
+
+            deepfake_result = results[0] if not _is_exc(results[0]) else DeepfakeDetectionResult(
+                is_deepfake=False,
+                confidence=0.0,
+                detection_method="error_fallback",
+                frame_analysis=[],
+                temporal_inconsistencies=[],
+            )
+
+            technical_analysis = results[1] if not _is_exc(results[1]) else VideoTechnicalAnalysis(
+                duration=0.0,
+                frame_rate=0.0,
+                resolution="unknown",
+                codec="unknown",
+                bitrate=0,
+                audio_channels=0,
+                is_edited=False,
+                edit_points=[],
+            )
+
+            frame_samples = results[2] if not _is_exc(results[2]) else []
+
+            motion_analysis = results[3] if not _is_exc(results[3]) else {
+                "average_motion": 0.0,
+                "motion_variance": 0.0,
+                "motion_consistency": 1.0,
+                "motion_analysis_method": "none",
+                "warnings": ["motion_analysis_skipped: error"],
+            }
+
+            face_tracking = results[4] if not _is_exc(results[4]) else []
+            audio_analysis = results[5] if not _is_exc(results[5]) else {"error": "audio_extraction_failed"}
+
             processing_time = time.time() - start_time
             return VideoAnalysisResult(
                 analysis_id=request.analysis_id,
@@ -71,21 +111,65 @@ class VideoProcessor:
                 ),
                 processing_time=processing_time,
                 model_version="1.0.0",
-                deepfake_detection=deepfake_result,
-                technical_analysis=technical_analysis,
-                frame_samples=frame_samples,
-                motion_analysis=motion_analysis,
-                face_tracking=face_tracking,
-                audio_analysis=audio_analysis,
+                deepfake_detection=deepfake_result,  # type: ignore[arg-type]
+                technical_analysis=technical_analysis,  # type: ignore[arg-type]
+                frame_samples=frame_samples,  # type: ignore[arg-type]
+                motion_analysis=motion_analysis,  # type: ignore[arg-type]
+                face_tracking=face_tracking,  # type: ignore[arg-type]
+                audio_analysis=audio_analysis,  # type: ignore[arg-type]
                 metadata={
                     "file_path": file_path,
                     "analysis_timestamp": datetime.utcnow().isoformat(),
                     "processor_version": "1.0.0",
                 },
             )
+        except Exception as e:
+            # Build a neutral, non-failing result if anything went wrong early (e.g., load failure)
+            logger.error(f"Video analysis failed for {file_path}: {e}")
+            processing_time = time.time() - start_time
+            return VideoAnalysisResult(
+                analysis_id=request.analysis_id,
+                evidence_id=request.evidence_id,
+                confidence_score=0.0,
+                processing_time=processing_time,
+                model_version="1.0.0",
+                deepfake_detection=DeepfakeDetectionResult(
+                    is_deepfake=False,
+                    confidence=0.0,
+                    detection_method="error_fallback",
+                    frame_analysis=[],
+                    temporal_inconsistencies=[],
+                ),
+                technical_analysis=VideoTechnicalAnalysis(
+                    duration=0.0,
+                    frame_rate=0.0,
+                    resolution="unknown",
+                    codec="unknown",
+                    bitrate=0,
+                    audio_channels=0,
+                    is_edited=False,
+                    edit_points=[],
+                ),
+                frame_samples=[],
+                motion_analysis={
+                    "average_motion": 0.0,
+                    "motion_variance": 0.0,
+                    "motion_consistency": 1.0,
+                    "motion_analysis_method": "none",
+                    "warnings": ["motion_analysis_skipped: load_error"],
+                },
+                face_tracking=[],
+                audio_analysis={"error": "audio_extraction_skipped"},
+                metadata={
+                    "file_path": file_path,
+                    "analysis_timestamp": datetime.utcnow().isoformat(),
+                    "processor_version": "1.0.0",
+                    "error": "video_analysis_failed",
+                },
+            )
         finally:
             try:
-                if cv2 is not None and 'video_capture' in locals():  # type: ignore
+                if cv2 is not None and video_capture is not None:  # type: ignore
                     video_capture.release()  # type: ignore
             except Exception:
                 pass
@@ -214,23 +298,60 @@ class VideoProcessor:
     async def _analyze_motion(self, video_capture) -> Dict[str, Any]:
         frames = await self._sample_frames_for_analysis(video_capture, sample_count=15)
         if len(frames) < 2 or cv2 is None:  # type: ignore
-            return {"error": "Insufficient frames or OpenCV unavailable"}
+            return {
+                "average_motion": 0.0,
+                "motion_variance": 0.0,
+                "motion_consistency": 1.0,
+                "motion_analysis_method": "none",
+                "warnings": ["motion_analysis_skipped: insufficient_frames_or_opencv_unavailable"],
+            }
         motion_magnitudes: List[float] = []
-        for i in range(1, len(frames)):
-            prev = cv2.cvtColor(frames[i - 1], cv2.COLOR_BGR2GRAY)  # type: ignore
-            curr = cv2.cvtColor(frames[i], cv2.COLOR_BGR2GRAY)  # type: ignore
-            flow = cv2.calcOpticalFlowPyrLK(prev, curr, None, None)  # type: ignore
-            if flow[0] is not None:
-                motion_magnitudes.append(float(np.mean(np.linalg.norm(flow[0], axis=1))))
+        warnings: List[str] = []
+        try:
+            for i in range(1, len(frames)):
+                prev = cv2.cvtColor(frames[i - 1], cv2.COLOR_BGR2GRAY)  # type: ignore
+                curr = cv2.cvtColor(frames[i], cv2.COLOR_BGR2GRAY)  # type: ignore
+
+                # Try to find good features to track
+                p0 = cv2.goodFeaturesToTrack(prev, maxCorners=200, qualityLevel=0.01, minDistance=7, blockSize=7)  # type: ignore
+
+                if p0 is None or len(p0) == 0:
+                    # Fallback to dense optical flow (Farneback)
+                    try:
+                        flow_dense = cv2.calcOpticalFlowFarneback(prev, curr, None, 0.5, 3, 15, 3, 5, 1.2, 0)  # type: ignore
+                        mag, _ang = cv2.cartToPolar(flow_dense[..., 0], flow_dense[..., 1])  # type: ignore
+                        motion_magnitudes.append(float(np.mean(mag)))
+                    except Exception:
+                        # If even this fails, skip this pair
+                        warnings.append("optical_flow_skipped_for_frame_pair")
+                        continue
+                else:
+                    # Use pyramidal LK on detected features
+                    p1, st, err = cv2.calcOpticalFlowPyrLK(prev, curr, p0, None)  # type: ignore
+                    if p1 is not None and st is not None:
+                        good_new = p1[st == 1]
+                        good_old = p0[st == 1]
+                        if len(good_new) > 0 and len(good_old) > 0:
+                            disp = (good_new - good_old).reshape(-1, 2)
+                            mag = np.linalg.norm(disp, axis=1)
+                            motion_magnitudes.append(float(np.mean(mag)))
+                    else:
+                        warnings.append("optical_flow_points_invalid")
+        except Exception as e:
+            warnings.append(f"motion_analysis_error: {e}")
+
         avg_motion = float(np.mean(motion_magnitudes)) if motion_magnitudes else 0.0
         motion_variance = float(np.var(motion_magnitudes)) if motion_magnitudes else 0.0
-        return {
+        result = {
             "average_motion": avg_motion,
             "motion_variance": motion_variance,
             "motion_consistency": float(1.0 / (1.0 + motion_variance)) if motion_variance >= 0 else 0.0,
             "total_motion_vectors": len(motion_magnitudes),
-            "motion_analysis_method": "optical_flow",
+            "motion_analysis_method": "optical_flow" if motion_magnitudes else "none",
         }
+        if warnings:
+            result["warnings"] = warnings
+        return result
 
     async def _track_faces(self, video_capture) -> List[Dict[str, Any]]:
         if cv2 is None:  # type: ignore
@@ -258,28 +379,46 @@ class VideoProcessor:
 
     async def _extract_audio_analysis(self, file_path: str) -> Dict[str, Any]:
         if mp is None:  # type: ignore
-            return {"error": "moviepy unavailable", "has_audio": False}
-        video = mp.VideoFileClip(file_path)  # type: ignore
+            return {"error": "moviepy_unavailable", "has_audio": False}
         try:
-            if video.audio is None:
-                return {"error": "No audio track found"}
-            audio_duration = float(video.audio.duration)  # type: ignore
-            audio_fps = int(video.audio.fps)  # type: ignore
-            temp_audio_path = f"/tmp/audio_{hashlib.md5(file_path.encode()).hexdigest()}.wav"
-            video.audio.write_audiofile(temp_audio_path, verbose=False, logger=None)  # type: ignore
-            Path(temp_audio_path).unlink(missing_ok=True)
-            return {
-                "duration": audio_duration,
-                "sample_rate": audio_fps,
-                "has_audio": True,
-                "audio_format": "wav",
-                "analysis_method": "moviepy_extraction",
-            }
-        finally:
+            video = mp.VideoFileClip(file_path)  # type: ignore
             try:
-                video.close()
-            except Exception:
-                pass
+                if video.audio is None:
+                    return {"error": "no_audio_track", "has_audio": False}
+                audio_duration = float(video.audio.duration)  # type: ignore
+                audio_fps = int(video.audio.fps)  # type: ignore
+                temp_audio_path = f"/tmp/audio_{hashlib.md5(file_path.encode()).hexdigest()}.wav"
+                try:
+                    video.audio.write_audiofile(temp_audio_path, verbose=False, logger=None)  # type: ignore
+                except Exception as e:
+                    # If ffmpeg unavailable or codec issue, still return metadata
+                    return {
+                        "duration": audio_duration,
+                        "sample_rate": audio_fps,
+                        "has_audio": True,
+                        "audio_format": "unknown",
+                        "analysis_method": "metadata_only",
+                        "warnings": [f"audio_extract_failed: {e}"],
+                    }
+                finally:
+                    try:
+                        Path(temp_audio_path).unlink(missing_ok=True)
+                    except Exception:
+                        pass
+                return {
+                    "duration": audio_duration,
+                    "sample_rate": audio_fps,
+                    "has_audio": True,
+                    "audio_format": "wav",
+                    "analysis_method": "moviepy_extraction",
+                }
+            finally:
+                try:
+                    video.close()
+                except Exception:
+                    pass
+        except Exception as e:
+            return {"error": f"audio_extraction_error: {e}", "has_audio": False}
 
     async def _sample_frames_for_analysis(self, video_capture, sample_count: int = 20) -> List[np.ndarray]:
         if cv2 is None:  # type: ignore

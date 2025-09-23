@@ -12,6 +12,7 @@ from typing import Dict, Any, List, Optional
 import PyPDF2
 import docx
 from docx import Document
+from docx.oxml.ns import qn
 import openpyxl
 from loguru import logger
 
@@ -50,7 +51,7 @@ class DocumentProcessor:
         start_time = time.time()
         
         try:
-            # Run all analysis components in parallel
+            # Run all analysis components in parallel with fault tolerance
             tasks = [
                 self._analyze_authenticity(file_path),
                 self._analyze_content(file_path),
@@ -58,23 +59,26 @@ class DocumentProcessor:
                 self._analyze_structure(file_path),
                 self._check_plagiarism(file_path)
             ]
-            
-            results = await asyncio.gather(*tasks)
-            
-            # Compile final results
-            authenticity_result = results[0]
-            content_analysis = results[1]
-            metadata_analysis = results[2]
-            structure_analysis = results[3]
-            plagiarism_check = results[4]
-            
+
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            def _safe(idx: int, default):
+                val = results[idx]
+                return val if not isinstance(val, Exception) else default
+
+            authenticity_result = _safe(0, DocumentAuthenticityResult(is_authentic=False, confidence=0.0, forgery_indicators=["analysis_error"], digital_signatures=[], creation_software=None))
+            content_analysis = _safe(1, DocumentContentAnalysis(text_content="", language="unknown", word_count=0, character_count=0, readability_score=0.0, sensitive_information=[], classification="unknown"))
+            metadata_analysis = _safe(2, {})
+            structure_analysis = _safe(3, {"error": "structure_analysis_failed"})
+            plagiarism_check = _safe(4, {"error": "plagiarism_check_failed"})
+
             processing_time = time.time() - start_time
-            
+
             # Calculate overall confidence
             overall_confidence = self._calculate_overall_confidence(
                 authenticity_result, content_analysis, metadata_analysis
             )
-            
+
             return DocumentAnalysisResult(
                 analysis_id=request.analysis_id,
                 evidence_id=request.evidence_id,
@@ -92,10 +96,29 @@ class DocumentProcessor:
                     "processor_version": "1.0.0"
                 }
             )
-            
+
         except Exception as e:
+            # Return neutral result on fatal error instead of raising
+            processing_time = time.time() - start_time
             logger.error(f"Error analyzing document {file_path}: {e}")
-            raise
+            return DocumentAnalysisResult(
+                analysis_id=request.analysis_id,
+                evidence_id=request.evidence_id,
+                confidence_score=0.0,
+                processing_time=processing_time,
+                model_version="1.0.0",
+                authenticity_analysis=DocumentAuthenticityResult(is_authentic=False, confidence=0.0, forgery_indicators=["fatal_error"], digital_signatures=[], creation_software=None),
+                content_analysis=DocumentContentAnalysis(text_content="", language="unknown", word_count=0, character_count=0, readability_score=0.0, sensitive_information=[], classification="unknown"),
+                metadata_analysis={},
+                structure_analysis={"error": "fatal_error"},
+                plagiarism_check={"error": "fatal_error"},
+                metadata={
+                    "file_path": file_path,
+                    "analysis_timestamp": datetime.utcnow().isoformat(),
+                    "processor_version": "1.0.0",
+                    "error": "document_analysis_failed"
+                }
+            )
     
     async def _analyze_authenticity(self, file_path: str) -> DocumentAuthenticityResult:
         """Analyze document authenticity using real AI models"""
@@ -601,11 +624,64 @@ class DocumentProcessor:
         try:
             with open(file_path, 'rb') as file:
                 pdf_reader = PyPDF2.PdfReader(file)
-                
+
+                # Section count: use PDF outlines/bookmarks when available
+                def _flatten_outline(items) -> int:
+                    try:
+                        count = 0
+                        for item in items:
+                            if isinstance(item, list):
+                                count += _flatten_outline(item)
+                            else:
+                                count += 1
+                        return count
+                    except Exception:
+                        return 0
+
+                try:
+                    outlines = getattr(pdf_reader, 'outline', None)
+                    if outlines is None and hasattr(pdf_reader, 'get_outlines'):
+                        outlines = list(pdf_reader.get_outlines())
+                    section_count = _flatten_outline(outlines) if outlines else 0
+                except Exception:
+                    section_count = 0
+
+                # Image count: count XObjects of subtype Image (including nested Forms)
+                def _count_images_from_xobject(xobj) -> int:
+                    image_total = 0
+                    try:
+                        for obj in xobj.values():
+                            try:
+                                resolved = obj.get_object()
+                            except Exception:
+                                resolved = obj
+                            subtype = resolved.get('/Subtype')
+                            if subtype == '/Image':
+                                image_total += 1
+                            elif subtype == '/Form':
+                                resources = resolved.get('/Resources')
+                                if resources and '/XObject' in resources:
+                                    image_total += _count_images_from_xobject(resources['/XObject'])
+                    except Exception:
+                        pass
+                    return image_total
+
+                image_count = 0
+                try:
+                    for page in pdf_reader.pages:
+                        resources = page.get('/Resources')
+                        if resources and '/XObject' in resources:
+                            image_count += _count_images_from_xobject(resources['/XObject'])
+                except Exception:
+                    image_count = 0
+
                 return {
                     "type": "pdf",
                     "page_count": len(pdf_reader.pages),
-                    "has_bookmarks": len(pdf_reader.outline) > 0 if pdf_reader.outline else False,
+                    "section_count": section_count,
+                    "table_count": 0,  # Table detection in PDFs requires specialized libs; default to 0
+                    "image_count": image_count,
+                    "has_bookmarks": section_count > 0,
                     "is_encrypted": pdf_reader.is_encrypted,
                     "structure": "standard_pdf"
                 }
@@ -617,12 +693,41 @@ class DocumentProcessor:
         """Analyze Word document structure"""
         try:
             doc = Document(file_path)
-            
+
+            # Section count from document sections
+            section_count = len(doc.sections)
+
+            # Estimate page count: count explicit page breaks (best-effort) + 1
+            try:
+                page_breaks = 0
+                NS = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+                for paragraph in doc.paragraphs:
+                    for run in paragraph.runs:
+                        el = run._element
+                        for br in el.xpath('.//w:br', namespaces=NS):
+                            br_type = br.get(qn('w:type'))
+                            if br_type == 'page':
+                                page_breaks += 1
+                page_count = max(1, page_breaks + 1)
+            except Exception:
+                page_count = 1
+
+            # Count images via document relationships (captures inline and floating)
+            try:
+                image_rels = [r for r in doc.part.rels.values() if 'image' in r.reltype]
+                image_count = len(image_rels)
+            except Exception:
+                image_count = len(getattr(doc, 'inline_shapes', []))
+
+            table_count = len(doc.tables)
+
             return {
                 "type": "word",
+                "page_count": page_count,
+                "section_count": section_count,
+                "table_count": table_count,
+                "image_count": image_count,
                 "paragraph_count": len(doc.paragraphs),
-                "table_count": len(doc.tables),
-                "image_count": len(doc.inline_shapes),
                 "structure": "standard_word"
             }
         except Exception as e:
@@ -638,12 +743,29 @@ class DocumentProcessor:
             for sheet_name in workbook.sheetnames:
                 sheet = workbook[sheet_name]
                 total_cells += sheet.max_row * sheet.max_column
+            # Tables per sheet
+            try:
+                table_count = sum(len(getattr(workbook[s], 'tables', {})) for s in workbook.sheetnames)
+            except Exception:
+                table_count = 0
+            # Images per sheet (best-effort; openpyxl stores on private attr)
+            try:
+                image_count = 0
+                for sheet_name in workbook.sheetnames:
+                    sheet = workbook[sheet_name]
+                    image_count += len(getattr(sheet, '_images', []))
+            except Exception:
+                image_count = 0
             
             return {
                 "type": "excel",
                 "sheet_count": len(workbook.sheetnames),
                 "sheet_names": workbook.sheetnames,
                 "total_cells": total_cells,
+                "page_count": 0,
+                "section_count": len(workbook.sheetnames),
+                "table_count": table_count,
+                "image_count": image_count,
                 "structure": "standard_excel"
             }
         except Exception as e:

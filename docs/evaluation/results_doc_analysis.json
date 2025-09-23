@@ -1,0 +1,1195 @@
+{
+  "overall": {
+    "count": 581,
+    "success_rate": 87.60757314974182,
+    "mean_ms": 56687.5701032696,
+    "median_ms": 427.88600000375885,
+    "p95_ms": 38468.90199999325,
+    "p99_ms": 994170.5054000022,
+    "status_distribution": {
+      "200": 484,
+      "101": 36,
+      "304": 3,
+      "201": 6,
+      "401": 16,
+      "202": 12,
+      "404": 6,
+      "204": 4,
+      "0": 14
+    },
+    "timing_avgs_ms": {
+      "blocked": 61.56900735278003,
+      "dns": 0.06388341968912141,
+      "connect": 5.7354792746114,
+      "ssl": 75.3232857142857,
+      "send": 6.448061962134251,
+      "wait": 7958.115180722994,
+      "receive": 48661.50583820943
+    },
+    "sample_errors": [
+      {
+        "url": "http://localhost:3000/api/v1/evidence/0a8348d0-c945-4095-a695-bd32f87a3b88/verify?network=amoy&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImRmMjBjZTNhLTQ2NzEtNDI5Zi1hOWNlLTVjNGRlNjI3OWIyMyIsImVtYWlsIjoiYWRtaW5AZm9yZW5zaWMtc3lzdGVtLmxvY2FsIiwicm9sZSI6ImFkbWluIiwib3JnYW5pemF0aW9uIjoiRm9yZW5zaWMgRXZpZGVuY2UgU3lzdGVtIiwibmFtZSI6IlN5c3RlbSBBZG1pbmlzdHJhdG9yIiwiaWF0IjoxNzU4NTg4MTY5LCJleHAiOjE3NTg1ODkwNjksImF1ZCI6ImZyb250ZW5kIiwiaXNzIjoiZXZpZGVuY2Utc2VydmljZSJ9.bPU9XnqCGz2g6a1Ubz5NF6umYK1aqkjBONFwuUeKiPY",
+        "method": "GET",
+        "status": 401,
+        "time_ms": 186.75499998806418,
+        "timings": {
+          "blocked": 26.450999981485307,
+          "dns": 0.021000000000000796,
+          "ssl": -1.0,
+          "connect": 3.960000000000001,
+          "send": 0.5009999999999994,
+          "wait": 154.751000000529,
+          "receive": 1.0710000060498714,
+          "_blocked_queueing": 17.869999981485307,
+          "_workerStart": -1.0,
+          "_workerReady": -1.0,
+          "_workerFetchStart": -1.0,
+          "_workerRespondWithSettled": -1.0
+        },
+        "started": "2025-09-23T00:57:50.189Z"
+      },
+      {
+        "url": "http://localhost:3000/api/v1/auth/logout",
+        "method": "POST",
+        "status": 401,
+        "time_ms": 612.114999976974,
+        "timings": {
+          "blocked": 34.496999969746916,
+          "dns": 0.014000000000002899,
+          "ssl": -1.0,
+          "connect": 2.3490000000000038,
+          "send": 0.6139999999999972,
+          "wait": 570.2419999804757,
+          "receive": 4.39900002675131,
+          "_blocked_queueing": 1.7159999697469175,
+          "_workerStart": -1.0,
+          "_workerReady": -1.0,
+          "_workerFetchStart": -1.0,
+          "_workerRespondWithSettled": -1.0
+        },
+        "started": "2025-09-23T00:57:53.521Z"
+      },
+      {
+        "url": "http://localhost:3000/api/v1/evidence/0a8348d0-c945-4095-a695-bd32f87a3b88/ai-analysis/results",
+        "method": "GET",
+        "status": 404,
+        "time_ms": 196.33399997837842,
+        "timings": {
+          "blocked": 6.271999987881631,
+          "dns": -1.0,
+          "ssl": -1.0,
+          "connect": -1.0,
+          "send": 0.4039999999999999,
+          "wait": 186.90200001791865,
+          "receive": 2.755999972578138,
+          "_blocked_queueing": 1.9629999878816307,
+          "_workerStart": -1.0,
+          "_workerReady": -1.0,
+          "_workerFetchStart": -1.0,
+          "_workerRespondWithSettled": -1.0
+        },
+        "started": "2025-09-23T01:00:52.165Z"
+      },
+      {
+        "url": "http://localhost:3000/api/v1/evidence/0a8348d0-c945-4095-a695-bd32f87a3b88/ai-analysis/results",
+        "method": "GET",
+        "status": 404,
+        "time_ms": 57.177000013239685,
+        "timings": {
+          "blocked": 3.085000016298145,
+          "dns": 0.01100000000000012,
+          "ssl": -1.0,
+          "connect": 0.778,
+          "send": 0.39400000000000013,
+          "wait": 51.935999980412426,
+          "receive": 0.973000016529113,
+          "_blocked_queueing": 1.875000016298145,
+          "_workerStart": -1.0,
+          "_workerReady": -1.0,
+          "_workerFetchStart": -1.0,
+          "_workerRespondWithSettled": -1.0
+        },
+        "started": "2025-09-23T01:00:53.371Z"
+      },
+      {
+        "url": "http://localhost:3000/api/v1/evidence/0a8348d0-c945-4095-a695-bd32f87a3b88/ai-analysis/results",
+        "method": "GET",
+        "status": 404,
+        "time_ms": 592.5010000072941,
+        "timings": {
+          "blocked": 6.077000001907349,
+          "dns": 0.018999999999999906,
+          "ssl": -1.0,
+          "connect": 13.642999999999999,
+          "send": 1.681000000000001,
+          "wait": 568.5709999851211,
+          "receive": 2.5100000202655792,
+          "_blocked_queueing": 4.648000001907349,
+          "_workerStart": -1.0,
+          "_workerReady": -1.0,
+          "_workerFetchStart": -1.0,
+          "_workerRespondWithSettled": -1.0
+        },
+        "started": "2025-09-23T01:02:29.196Z"
+      }
+    ]
+  },
+  "per_endpoint": [
+    {
+      "endpoint": "http://localhost:3000/api/v1/activity",
+      "count": 16,
+      "success_rate": 100.0,
+      "mean_ms": 1884.3113750115763,
+      "median_ms": 701.918000009669,
+      "p95_ms": 6370.082250042433,
+      "p99_ms": 8242.154850013756,
+      "status_distribution": {
+        "200": 16
+      },
+      "timing_avgs_ms": {
+        "blocked": 13.55768750825245,
+        "dns": 0.022000000000000117,
+        "connect": 1.6075624999999998,
+        "ssl": NaN,
+        "send": 1.0913125,
+        "wait": 1865.66118749989,
+        "receive": 2.371625003434019
+      },
+      "sample_errors": []
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/auth/login",
+      "count": 10,
+      "success_rate": 100.0,
+      "mean_ms": 1342.0138000071856,
+      "median_ms": 503.0370000064522,
+      "p95_ms": 4166.356250013781,
+      "p99_ms": 4421.673650012338,
+      "status_distribution": {
+        "200": 10
+      },
+      "timing_avgs_ms": {
+        "blocked": 3.5977000052813444,
+        "dns": 0.017444444444444412,
+        "connect": 1.2184444444444444,
+        "ssl": NaN,
+        "send": 0.5201000000000002,
+        "wait": 1335.1686999979554,
+        "receive": 1.6150000039488077
+      },
+      "sample_errors": []
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/auth/logout",
+      "count": 9,
+      "success_rate": 11.11111111111111,
+      "mean_ms": 1765.144333329816,
+      "median_ms": 1173.5010000155903,
+      "p95_ms": 3674.0835999837145,
+      "p99_ms": 3942.94791997876,
+      "status_distribution": {
+        "401": 4,
+        "0": 4,
+        "200": 1
+      },
+      "timing_avgs_ms": {
+        "blocked": 1469.7027777734866,
+        "dns": 0.013200000000001499,
+        "connect": 2.519600000000002,
+        "ssl": NaN,
+        "send": 0.3646666666666661,
+        "wait": 292.08266667018415,
+        "receive": 1.5871111083672278
+      },
+      "sample_errors": [
+        {
+          "url": "http://localhost:3000/api/v1/auth/logout",
+          "method": "POST",
+          "status": 401,
+          "time_ms": 612.114999976974,
+          "timings": {
+            "blocked": 34.496999969746916,
+            "dns": 0.014000000000002899,
+            "ssl": -1.0,
+            "connect": 2.3490000000000038,
+            "send": 0.6139999999999972,
+            "wait": 570.2419999804757,
+            "receive": 4.39900002675131,
+            "_blocked_queueing": 1.7159999697469175,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T00:57:53.521Z"
+        },
+        {
+          "url": "http://localhost:3000/api/v1/auth/logout",
+          "method": "POST",
+          "status": 401,
+          "time_ms": 1173.5010000155903,
+          "timings": {
+            "blocked": 43.043000003948805,
+            "dns": 0.011000000000002785,
+            "ssl": -1.0,
+            "connect": 1.5250000000000057,
+            "send": 0.8449999999999989,
+            "wait": 1126.7010000114776,
+            "receive": 1.3760000001639128,
+            "_blocked_queueing": 4.740000003948808,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T01:30:42.313Z"
+        },
+        {
+          "url": "http://localhost:3000/api/v1/auth/logout",
+          "method": "POST",
+          "status": 401,
+          "time_ms": 77.59100001550092,
+          "timings": {
+            "blocked": 11.751000002287329,
+            "dns": 0.02200000000000024,
+            "ssl": -1.0,
+            "connect": 0.8780000000000001,
+            "send": 0.5129999999999999,
+            "wait": 61.53100002234429,
+            "receive": 2.8959999908693135,
+            "_blocked_queueing": 2.1560000022873282,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T07:41:06.789Z"
+        },
+        {
+          "url": "http://localhost:3000/api/v1/auth/logout",
+          "method": "POST",
+          "status": 401,
+          "time_ms": 217.38300005042925,
+          "timings": {
+            "blocked": 31.54900003926456,
+            "dns": 0.010000000000001563,
+            "ssl": -1.0,
+            "connect": 1.2250000000000014,
+            "send": 0.5769999999999982,
+            "wait": 183.18800000531226,
+            "receive": 0.8340000058524311,
+            "_blocked_queueing": 2.9100000392645597,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T07:57:40.770Z"
+        }
+      ]
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/auth/me",
+      "count": 3,
+      "success_rate": 66.66666666666666,
+      "mean_ms": 996.7113333251004,
+      "median_ms": 752.7859999681823,
+      "p95_ms": 1696.9966999828873,
+      "p99_ms": 1780.9265399841945,
+      "status_distribution": {
+        "200": 2,
+        "401": 1
+      },
+      "timing_avgs_ms": {
+        "blocked": 27.4073333435754,
+        "dns": 0.028999999999999915,
+        "connect": 4.207999999999999,
+        "ssl": NaN,
+        "send": 0.4029999999999998,
+        "wait": 966.0320000074097,
+        "receive": 1.4566666407821078
+      },
+      "sample_errors": [
+        {
+          "url": "http://localhost:3000/api/v1/auth/me",
+          "method": "GET",
+          "status": 401,
+          "time_ms": 1801.9089999845214,
+          "timings": {
+            "blocked": 8.49300003780797,
+            "dns": 0.028999999999999915,
+            "ssl": -1.0,
+            "connect": 4.207999999999999,
+            "send": 0.5680000000000014,
+            "wait": 1787.6219999829755,
+            "receive": 0.9889999637380242,
+            "_blocked_queueing": 2.0460000378079712,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T07:40:46.452Z"
+        }
+      ]
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/cases",
+      "count": 47,
+      "success_rate": 100.0,
+      "mean_ms": 851.0092127638209,
+      "median_ms": 251.65199999054892,
+      "p95_ms": 4382.759499958008,
+      "p99_ms": 7288.416020020863,
+      "status_distribution": {
+        "200": 44,
+        "201": 3
+      },
+      "timing_avgs_ms": {
+        "blocked": 14.59546809076256,
+        "dns": 0.025888888888888857,
+        "connect": 1.8962777777777775,
+        "ssl": NaN,
+        "send": 0.7580851063829789,
+        "wait": 832.0282340391157,
+        "receive": 2.155127655219366
+      },
+      "sample_errors": []
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence",
+      "count": 76,
+      "success_rate": 100.0,
+      "mean_ms": 4953.367157891029,
+      "median_ms": 3247.949500006858,
+      "p95_ms": 14692.754999986368,
+      "p99_ms": 30875.98574998404,
+      "status_distribution": {
+        "200": 76
+      },
+      "timing_avgs_ms": {
+        "blocked": 17.894289470996952,
+        "dns": 0.045797101449275325,
+        "connect": 1.6356086956521743,
+        "ssl": NaN,
+        "send": 0.6151052631578953,
+        "wait": 2805.4486578963856,
+        "receive": 2127.8825657868047
+      },
+      "sample_errors": []
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence/0a8348d0-c945-4095-a695-bd32f87a3b88",
+      "count": 13,
+      "success_rate": 84.61538461538461,
+      "mean_ms": 2512.896615376721,
+      "median_ms": 715.8220000054016,
+      "p95_ms": 8615.996600023864,
+      "p99_ms": 9321.072920027933,
+      "status_distribution": {
+        "200": 11,
+        "401": 2
+      },
+      "timing_avgs_ms": {
+        "blocked": 37.203076933646145,
+        "dns": 0.0679999999999996,
+        "connect": 2.3748181818181817,
+        "ssl": NaN,
+        "send": 0.6239999999999999,
+        "wait": 1742.9729230754556,
+        "receive": 730.0296153676195
+      },
+      "sample_errors": [
+        {
+          "url": "http://localhost:3000/api/v1/evidence/0a8348d0-c945-4095-a695-bd32f87a3b88",
+          "method": "GET",
+          "status": 401,
+          "time_ms": 74.73199997996538,
+          "timings": {
+            "blocked": 4.49100001802668,
+            "dns": 0.019000000000000128,
+            "ssl": -1.0,
+            "connect": 0.702,
+            "send": 0.379,
+            "wait": 68.2550000257939,
+            "receive": 0.885999936144799,
+            "_blocked_queueing": 2.1810000180266798,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T07:40:48.290Z"
+        },
+        {
+          "url": "http://localhost:3000/api/v1/evidence/0a8348d0-c945-4095-a695-bd32f87a3b88",
+          "method": "GET",
+          "status": 401,
+          "time_ms": 480.99099996034056,
+          "timings": {
+            "blocked": 202.2129999942854,
+            "dns": -1.0,
+            "ssl": -1.0,
+            "connect": -1.0,
+            "send": 0.37900000000000134,
+            "wait": 273.83400001407415,
+            "receive": 4.564999951981008,
+            "_blocked_queueing": 190.6639999942854,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T07:40:49.382Z"
+        }
+      ]
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence/0a8348d0-c945-4095-a695-bd32f87a3b88/ai-analysis",
+      "count": 6,
+      "success_rate": 100.0,
+      "mean_ms": 12659.102333326367,
+      "median_ms": 2463.431499987943,
+      "p95_ms": 36823.52974998253,
+      "p99_ms": 38205.696349974445,
+      "status_distribution": {
+        "202": 6
+      },
+      "timing_avgs_ms": {
+        "blocked": 3.713500003844499,
+        "dns": 0.01624999999999993,
+        "connect": 0.829,
+        "ssl": NaN,
+        "send": 0.42766666666666664,
+        "wait": 12652.84133332679,
+        "receive": 1.5563333290629089
+      },
+      "sample_errors": []
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence/0a8348d0-c945-4095-a695-bd32f87a3b88/ai-analysis/results",
+      "count": 8,
+      "success_rate": 25.0,
+      "mean_ms": 302.61550000704966,
+      "median_ms": 189.07599998055957,
+      "p95_ms": 881.629450012701,
+      "p99_ms": 1006.1770900150302,
+      "status_distribution": {
+        "404": 6,
+        "200": 2
+      },
+      "timing_avgs_ms": {
+        "blocked": 6.538500003312249,
+        "dns": 0.014333333333333309,
+        "connect": 4.998333333333333,
+        "ssl": NaN,
+        "send": 0.5826250000000002,
+        "wait": 291.57537498822336,
+        "receive": 2.0392500155139714
+      },
+      "sample_errors": [
+        {
+          "url": "http://localhost:3000/api/v1/evidence/0a8348d0-c945-4095-a695-bd32f87a3b88/ai-analysis/results",
+          "method": "GET",
+          "status": 404,
+          "time_ms": 196.33399997837842,
+          "timings": {
+            "blocked": 6.271999987881631,
+            "dns": -1.0,
+            "ssl": -1.0,
+            "connect": -1.0,
+            "send": 0.4039999999999999,
+            "wait": 186.90200001791865,
+            "receive": 2.755999972578138,
+            "_blocked_queueing": 1.9629999878816307,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T01:00:52.165Z"
+        },
+        {
+          "url": "http://localhost:3000/api/v1/evidence/0a8348d0-c945-4095-a695-bd32f87a3b88/ai-analysis/results",
+          "method": "GET",
+          "status": 404,
+          "time_ms": 57.177000013239685,
+          "timings": {
+            "blocked": 3.085000016298145,
+            "dns": 0.01100000000000012,
+            "ssl": -1.0,
+            "connect": 0.778,
+            "send": 0.39400000000000013,
+            "wait": 51.935999980412426,
+            "receive": 0.973000016529113,
+            "_blocked_queueing": 1.875000016298145,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T01:00:53.371Z"
+        },
+        {
+          "url": "http://localhost:3000/api/v1/evidence/0a8348d0-c945-4095-a695-bd32f87a3b88/ai-analysis/results",
+          "method": "GET",
+          "status": 404,
+          "time_ms": 592.5010000072941,
+          "timings": {
+            "blocked": 6.077000001907349,
+            "dns": 0.018999999999999906,
+            "ssl": -1.0,
+            "connect": 13.642999999999999,
+            "send": 1.681000000000001,
+            "wait": 568.5709999851211,
+            "receive": 2.5100000202655792,
+            "_blocked_queueing": 4.648000001907349,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T01:02:29.196Z"
+        },
+        {
+          "url": "http://localhost:3000/api/v1/evidence/0a8348d0-c945-4095-a695-bd32f87a3b88/ai-analysis/results",
+          "method": "GET",
+          "status": 404,
+          "time_ms": 1037.3140000156127,
+          "timings": {
+            "blocked": 5.107999993026256,
+            "dns": -1.0,
+            "ssl": -1.0,
+            "connect": -1.0,
+            "send": 0.4209999999999998,
+            "wait": 1026.611999981191,
+            "receive": 5.173000041395426,
+            "_blocked_queueing": 2.5369999930262566,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T01:02:30.810Z"
+        },
+        {
+          "url": "http://localhost:3000/api/v1/evidence/0a8348d0-c945-4095-a695-bd32f87a3b88/ai-analysis/results",
+          "method": "GET",
+          "status": 404,
+          "time_ms": 239.76000002585351,
+          "timings": {
+            "blocked": 4.861000026859343,
+            "dns": -1.0,
+            "ssl": -1.0,
+            "connect": -1.0,
+            "send": 0.5489999999999999,
+            "wait": 233.38599999278784,
+            "receive": 0.9640000062063336,
+            "_blocked_queueing": 2.465000026859343,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T01:33:29.925Z"
+        }
+      ]
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence/0a8348d0-c945-4095-a695-bd32f87a3b88/ai-analysis/status",
+      "count": 17,
+      "success_rate": 100.0,
+      "mean_ms": 12846.619352947437,
+      "median_ms": 409.6409999912642,
+      "p95_ms": 87061.91520000937,
+      "p99_ms": 112564.41824003242,
+      "status_distribution": {
+        "200": 17
+      },
+      "timing_avgs_ms": {
+        "blocked": 18.87670589065749,
+        "dns": 0.040250000000001,
+        "connect": 9.211625000000002,
+        "ssl": NaN,
+        "send": 0.6292352941176449,
+        "wait": 12815.77182353234,
+        "receive": 2.6339411714990786
+      },
+      "sample_errors": []
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence/0a8348d0-c945-4095-a695-bd32f87a3b88/blockchain",
+      "count": 1,
+      "success_rate": 100.0,
+      "mean_ms": 32585.59599995706,
+      "median_ms": 32585.59599995706,
+      "p95_ms": 32585.59599995706,
+      "p99_ms": 32585.59599995706,
+      "status_distribution": {
+        "200": 1
+      },
+      "timing_avgs_ms": {
+        "blocked": 9.590999952744692,
+        "dns": 0.05400000000000005,
+        "connect": 1.8359999999999999,
+        "ssl": NaN,
+        "send": 0.5260000000000002,
+        "wait": 32572.02300001259,
+        "receive": 1.5659999917261302
+      },
+      "sample_errors": []
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence/0a8348d0-c945-4095-a695-bd32f87a3b88/verify",
+      "count": 2,
+      "success_rate": 50.0,
+      "mean_ms": 718.0310000040587,
+      "median_ms": 718.0310000040587,
+      "p95_ms": 1196.1794000184539,
+      "p99_ms": 1238.6814800197333,
+      "status_distribution": {
+        "401": 1,
+        "200": 1
+      },
+      "timing_avgs_ms": {
+        "blocked": 15.409499997088686,
+        "dns": 0.021000000000000796,
+        "connect": 3.960000000000001,
+        "ssl": NaN,
+        "send": 0.42249999999999976,
+        "wait": 698.90100000453,
+        "receive": 1.3075000024400651
+      },
+      "sample_errors": [
+        {
+          "url": "http://localhost:3000/api/v1/evidence/0a8348d0-c945-4095-a695-bd32f87a3b88/verify?network=amoy&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImRmMjBjZTNhLTQ2NzEtNDI5Zi1hOWNlLTVjNGRlNjI3OWIyMyIsImVtYWlsIjoiYWRtaW5AZm9yZW5zaWMtc3lzdGVtLmxvY2FsIiwicm9sZSI6ImFkbWluIiwib3JnYW5pemF0aW9uIjoiRm9yZW5zaWMgRXZpZGVuY2UgU3lzdGVtIiwibmFtZSI6IlN5c3RlbSBBZG1pbmlzdHJhdG9yIiwiaWF0IjoxNzU4NTg4MTY5LCJleHAiOjE3NTg1ODkwNjksImF1ZCI6ImZyb250ZW5kIiwiaXNzIjoiZXZpZGVuY2Utc2VydmljZSJ9.bPU9XnqCGz2g6a1Ubz5NF6umYK1aqkjBONFwuUeKiPY",
+          "method": "GET",
+          "status": 401,
+          "time_ms": 186.75499998806418,
+          "timings": {
+            "blocked": 26.450999981485307,
+            "dns": 0.021000000000000796,
+            "ssl": -1.0,
+            "connect": 3.960000000000001,
+            "send": 0.5009999999999994,
+            "wait": 154.751000000529,
+            "receive": 1.0710000060498714,
+            "_blocked_queueing": 17.869999981485307,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T00:57:50.189Z"
+        }
+      ]
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence/0f7f1e8d-4275-435c-9071-1965ef27ee10",
+      "count": 5,
+      "success_rate": 60.0,
+      "mean_ms": 4952.446800006526,
+      "median_ms": 2798.1890000312887,
+      "p95_ms": 12763.131799998946,
+      "p99_ms": 14201.44396000066,
+      "status_distribution": {
+        "200": 3,
+        "401": 2
+      },
+      "timing_avgs_ms": {
+        "blocked": 1311.3107999849392,
+        "dns": 0.21380000000016489,
+        "connect": 4.66860000000012,
+        "ssl": NaN,
+        "send": 0.4705999999999665,
+        "wait": 3631.2258000009424,
+        "receive": 4.557200020644814
+      },
+      "sample_errors": [
+        {
+          "url": "http://localhost:3000/api/v1/evidence/0f7f1e8d-4275-435c-9071-1965ef27ee10",
+          "method": "GET",
+          "status": 401,
+          "time_ms": 14561.022000001089,
+          "timings": {
+            "blocked": 6368.798000002995,
+            "dns": 0.7540000000008149,
+            "ssl": -1.0,
+            "connect": 1.4940000000005966,
+            "send": 0.20899999999983265,
+            "wait": 8181.342999998443,
+            "receive": 8.423999999649823,
+            "_blocked_queueing": 2.4160000029951334,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T08:39:35.746Z"
+        },
+        {
+          "url": "http://localhost:3000/api/v1/evidence/0f7f1e8d-4275-435c-9071-1965ef27ee10",
+          "method": "GET",
+          "status": 401,
+          "time_ms": 5571.570999990388,
+          "timings": {
+            "blocked": 96.78299997636303,
+            "dns": 0.26600000000000534,
+            "ssl": -1.0,
+            "connect": 17.685000000000002,
+            "send": 0.7379999999999995,
+            "wait": 5450.599999993235,
+            "receive": 5.499000020790845,
+            "_blocked_queueing": 6.119999976363033,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T08:39:51.358Z"
+        }
+      ]
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence/0f7f1e8d-4275-435c-9071-1965ef27ee10/ai-analysis",
+      "count": 1,
+      "success_rate": 100.0,
+      "mean_ms": 1766.7749999673106,
+      "median_ms": 1766.7749999673106,
+      "p95_ms": 1766.7749999673106,
+      "p99_ms": 1766.7749999673106,
+      "status_distribution": {
+        "202": 1
+      },
+      "timing_avgs_ms": {
+        "blocked": 2.7900000088401136,
+        "dns": NaN,
+        "connect": NaN,
+        "ssl": NaN,
+        "send": 0.3400000000000001,
+        "wait": 1762.1899999970458,
+        "receive": 1.454999961424619
+      },
+      "sample_errors": []
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence/0f7f1e8d-4275-435c-9071-1965ef27ee10/ai-analysis/results",
+      "count": 4,
+      "success_rate": 50.0,
+      "mean_ms": 4366.447499996739,
+      "median_ms": 1525.1174999866635,
+      "p95_ms": 12665.96195000413,
+      "p99_ms": 14043.17399000932,
+      "status_distribution": {
+        "200": 2,
+        "401": 2
+      },
+      "timing_avgs_ms": {
+        "blocked": 80.30949999702814,
+        "dns": 0.022999999999999687,
+        "connect": 13.479999999999999,
+        "ssl": NaN,
+        "send": 1.7735000000000065,
+        "wait": 4275.865999991697,
+        "receive": 5.122750008013099
+      },
+      "sample_errors": [
+        {
+          "url": "http://localhost:3000/api/v1/evidence/0f7f1e8d-4275-435c-9071-1965ef27ee10/ai-analysis/results",
+          "method": "GET",
+          "status": 401,
+          "time_ms": 14387.477000010622,
+          "timings": {
+            "blocked": 18.37700004107505,
+            "dns": 0.022999999999999687,
+            "ssl": -1.0,
+            "connect": 13.479999999999999,
+            "send": 0.554000000000002,
+            "wait": 14341.896999986593,
+            "receive": 13.145999982953072,
+            "_blocked_queueing": 3.904000041075051,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T08:39:35.747Z"
+        },
+        {
+          "url": "http://localhost:3000/api/v1/evidence/0f7f1e8d-4275-435c-9071-1965ef27ee10/ai-analysis/results",
+          "method": "GET",
+          "status": 401,
+          "time_ms": 2910.7099999673665,
+          "timings": {
+            "blocked": 293.3249999871701,
+            "dns": -1.0,
+            "ssl": -1.0,
+            "connect": -1.0,
+            "send": 5.874000000000024,
+            "wait": 2606.887999994028,
+            "receive": 4.622999986167997,
+            "_blocked_queueing": 8.7739999871701,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T08:39:51.157Z"
+        }
+      ]
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence/0f7f1e8d-4275-435c-9071-1965ef27ee10/ai-analysis/status",
+      "count": 5,
+      "success_rate": 100.0,
+      "mean_ms": 571.14019998881,
+      "median_ms": 127.6440000075884,
+      "p95_ms": 1753.1551999744163,
+      "p99_ms": 2015.9814399768109,
+      "status_distribution": {
+        "200": 5
+      },
+      "timing_avgs_ms": {
+        "blocked": 4.983599996975809,
+        "dns": 0.02040000000000002,
+        "connect": 0.9506,
+        "ssl": NaN,
+        "send": 0.4725999999999998,
+        "wait": 563.0965999888666,
+        "receive": 1.6164000029675663
+      },
+      "sample_errors": []
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence/crosschain/health",
+      "count": 13,
+      "success_rate": 100.0,
+      "mean_ms": 3562.059230773419,
+      "median_ms": 2099.732000043519,
+      "p95_ms": 10243.627600012505,
+      "p99_ms": 10264.691919993978,
+      "status_distribution": {
+        "200": 13
+      },
+      "timing_avgs_ms": {
+        "blocked": 15.988076916300047,
+        "dns": 0.01969230769230766,
+        "connect": 1.862230769230769,
+        "ssl": NaN,
+        "send": 1.196692307692308,
+        "wait": 3540.7701538463507,
+        "receive": 2.2223846261532834
+      },
+      "sample_errors": []
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence/f7ad2296-c11c-4bf3-8a90-7c0aafa143f7",
+      "count": 12,
+      "success_rate": 83.33333333333334,
+      "mean_ms": 11582.774500000683,
+      "median_ms": 7399.793000001851,
+      "p95_ms": 34800.91455000678,
+      "p99_ms": 43911.80051002471,
+      "status_distribution": {
+        "200": 10,
+        "401": 2
+      },
+      "timing_avgs_ms": {
+        "blocked": 51.586333330481004,
+        "dns": 0.2182500000000007,
+        "connect": 14.338833333333335,
+        "ssl": NaN,
+        "send": 0.7127499999999986,
+        "wait": 7670.721250000529,
+        "receive": 3845.19708333634
+      },
+      "sample_errors": [
+        {
+          "url": "http://localhost:3000/api/v1/evidence/f7ad2296-c11c-4bf3-8a90-7c0aafa143f7",
+          "method": "GET",
+          "status": 401,
+          "time_ms": 10554.78000000878,
+          "timings": {
+            "blocked": 395.49799998651815,
+            "dns": 2.3770000000000095,
+            "ssl": -1.0,
+            "connect": 4.982000000000028,
+            "send": 2.72199999999998,
+            "wait": 10147.84600000738,
+            "receive": 1.3550000148825347,
+            "_blocked_queueing": 11.823999986518174,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T07:57:20.799Z"
+        },
+        {
+          "url": "http://localhost:3000/api/v1/evidence/f7ad2296-c11c-4bf3-8a90-7c0aafa143f7",
+          "method": "GET",
+          "status": 401,
+          "time_ms": 5712.129999999378,
+          "timings": {
+            "blocked": 23.908000016897915,
+            "dns": 0.022999999999999687,
+            "ssl": -1.0,
+            "connect": 1.863000000000003,
+            "send": 0.6269999999999989,
+            "wait": 5683.522999984589,
+            "receive": 2.1859999978914857,
+            "_blocked_queueing": 4.069000016897917,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T07:57:32.360Z"
+        }
+      ]
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence/f7ad2296-c11c-4bf3-8a90-7c0aafa143f7/ai-analysis",
+      "count": 5,
+      "success_rate": 100.0,
+      "mean_ms": 918.0142000087096,
+      "median_ms": 378.0560000194833,
+      "p95_ms": 2197.13840002118,
+      "p99_ms": 2423.5276800235924,
+      "status_distribution": {
+        "202": 5
+      },
+      "timing_avgs_ms": {
+        "blocked": 2.9794000062651933,
+        "dns": 0.015250000000000014,
+        "connect": 0.998,
+        "ssl": NaN,
+        "send": 0.5092,
+        "wait": 912.463400018201,
+        "receive": 1.2515999842435122
+      },
+      "sample_errors": []
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence/f7ad2296-c11c-4bf3-8a90-7c0aafa143f7/ai-analysis/results",
+      "count": 7,
+      "success_rate": 71.42857142857143,
+      "mean_ms": 3183.7475714364364,
+      "median_ms": 933.6980000399761,
+      "p95_ms": 9091.239300003603,
+      "p99_ms": 10248.747060008816,
+      "status_distribution": {
+        "200": 5,
+        "401": 2
+      },
+      "timing_avgs_ms": {
+        "blocked": 62.9209999959719,
+        "dns": 0.03683333333333435,
+        "connect": 3.222166666666665,
+        "ssl": NaN,
+        "send": 1.3009999999999995,
+        "wait": 3114.345999995098,
+        "receive": 2.386142873936998
+      },
+      "sample_errors": [
+        {
+          "url": "http://localhost:3000/api/v1/evidence/f7ad2296-c11c-4bf3-8a90-7c0aafa143f7/ai-analysis/results",
+          "method": "GET",
+          "status": 401,
+          "time_ms": 10538.124000010122,
+          "timings": {
+            "blocked": 397.1059999818653,
+            "dns": 0.03100000000000591,
+            "ssl": -1.0,
+            "connect": 0.9979999999999905,
+            "send": 3.242999999999995,
+            "wait": 10133.819999983576,
+            "receive": 2.926000044681132,
+            "_blocked_queueing": 15.377999981865287,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T07:57:20.807Z"
+        },
+        {
+          "url": "http://localhost:3000/api/v1/evidence/f7ad2296-c11c-4bf3-8a90-7c0aafa143f7/ai-analysis/results",
+          "method": "GET",
+          "status": 401,
+          "time_ms": 5715.174999988403,
+          "timings": {
+            "blocked": 7.3339999641478055,
+            "dns": 0.027000000000000135,
+            "ssl": -1.0,
+            "connect": 2.1090000000000004,
+            "send": 1.3889999999999993,
+            "wait": 5702.604999976165,
+            "receive": 1.7110000480897725,
+            "_blocked_queueing": 4.428999964147806,
+            "_workerStart": -1.0,
+            "_workerReady": -1.0,
+            "_workerFetchStart": -1.0,
+            "_workerRespondWithSettled": -1.0
+          },
+          "started": "2025-09-23T07:57:32.355Z"
+        }
+      ]
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence/f7ad2296-c11c-4bf3-8a90-7c0aafa143f7/ai-analysis/status",
+      "count": 11,
+      "success_rate": 100.0,
+      "mean_ms": 629.7279090876856,
+      "median_ms": 348.1910000321679,
+      "p95_ms": 2142.969999989532,
+      "p99_ms": 3267.979599978637,
+      "status_distribution": {
+        "200": 11
+      },
+      "timing_avgs_ms": {
+        "blocked": 6.0780908995138665,
+        "dns": 0.020818181818181694,
+        "connect": 1.1889999999999998,
+        "ssl": NaN,
+        "send": 0.5418181818181818,
+        "wait": 620.7782727202792,
+        "receive": 1.1199091042561287
+      },
+      "sample_errors": []
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence/f7ad2296-c11c-4bf3-8a90-7c0aafa143f7/blockchain",
+      "count": 1,
+      "success_rate": 100.0,
+      "mean_ms": 18686.678999971304,
+      "median_ms": 18686.678999971304,
+      "p95_ms": 18686.678999971304,
+      "p99_ms": 18686.678999971304,
+      "status_distribution": {
+        "200": 1
+      },
+      "timing_avgs_ms": {
+        "blocked": 8.038999960821123,
+        "dns": 0.016000000000000014,
+        "connect": 1.1819999999999997,
+        "ssl": NaN,
+        "send": 0.6600000000000001,
+        "wait": 18674.93699998979,
+        "receive": 1.8450000206939876
+      },
+      "sample_errors": []
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence/f7ad2296-c11c-4bf3-8a90-7c0aafa143f7/verify",
+      "count": 1,
+      "success_rate": 100.0,
+      "mean_ms": 8219.203999996666,
+      "median_ms": 8219.203999996666,
+      "p95_ms": 8219.203999996666,
+      "p99_ms": 8219.203999996666,
+      "status_distribution": {
+        "200": 1
+      },
+      "timing_avgs_ms": {
+        "blocked": 45.32199996407702,
+        "dns": 0.03399999999999892,
+        "connect": 44.57300000000001,
+        "ssl": NaN,
+        "send": 1.2369999999999948,
+        "wait": 8126.131000005457,
+        "receive": 1.9070000271312892
+      },
+      "sample_errors": []
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence/feef93a3-e300-405c-85ca-a04e9cc88bb0",
+      "count": 1,
+      "success_rate": 100.0,
+      "mean_ms": 26329.07600001551,
+      "median_ms": 26329.07600001551,
+      "p95_ms": 26329.07600001551,
+      "p99_ms": 26329.07600001551,
+      "status_distribution": {
+        "200": 1
+      },
+      "timing_avgs_ms": {
+        "blocked": 92.64200001370907,
+        "dns": 0.02400000000000091,
+        "connect": 1.6780000000000044,
+        "ssl": NaN,
+        "send": 0.42900000000000205,
+        "wait": 20558.77099997886,
+        "receive": 5675.53200002294
+      },
+      "sample_errors": []
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence/feef93a3-e300-405c-85ca-a04e9cc88bb0/ai-analysis/results",
+      "count": 1,
+      "success_rate": 100.0,
+      "mean_ms": 2481.456000010308,
+      "median_ms": 2481.456000010308,
+      "p95_ms": 2481.456000010308,
+      "p99_ms": 2481.456000010308,
+      "status_distribution": {
+        "200": 1
+      },
+      "timing_avgs_ms": {
+        "blocked": 13.218000036802144,
+        "dns": 0.03799999999999848,
+        "connect": 4.065999999999999,
+        "ssl": NaN,
+        "send": 0.6289999999999996,
+        "wait": 2461.570000024207,
+        "receive": 1.934999949298799
+      },
+      "sample_errors": []
+    },
+    {
+      "endpoint": "http://localhost:3000/api/v1/evidence/upload",
+      "count": 3,
+      "success_rate": 100.0,
+      "mean_ms": 8246.050666688418,
+      "median_ms": 8056.251000048324,
+      "p95_ms": 8856.59670003493,
+      "p99_ms": 8927.738540033739,
+      "status_distribution": {
+        "201": 3
+      },
+      "timing_avgs_ms": {
+        "blocked": 6.640000019926577,
+        "dns": 0.012666666666666678,
+        "connect": 0.9323333333333332,
+        "ssl": NaN,
+        "send": 945.8503333333333,
+        "wait": 6824.615999994017,
+        "receive": 467.9993333411403
+      },
+      "sample_errors": []
+    },
+    {
+      "endpoint": "http://localhost:3001/api/v1/auth/users",
+      "count": 8,
+      "success_rate": 100.0,
+      "mean_ms": 930.856374995416,
+      "median_ms": 658.5440000057444,
+      "p95_ms": 2259.5804999753163,
+      "p99_ms": 2373.1232999649624,
+      "status_distribution": {
+        "204": 4,
+        "200": 4
+      },
+      "timing_avgs_ms": {
+        "blocked": 313.3441249862807,
+        "dns": 0.02212499999999956,
+        "connect": 8.91825,
+        "ssl": NaN,
+        "send": 0.9581249999999999,
+        "wait": 606.2439999983543,
+        "receive": 1.3697500107809901
+      },
+      "sample_errors": []
+    }
+  ]
+}
